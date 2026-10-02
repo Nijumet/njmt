@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blaster Duel | Elite Arena</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700;900&family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        display: ['Outfit', 'sans-serif'],
+                        body: ['Space Grotesk', 'sans-serif'],
+                    },
+                    colors: {
+                        p1: '#00f2ff',
+                        p2: '#ff00c8',
+                        arena: '#1a1a24',
+                        bg: '#0a0a0f',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            margin: 0;
+            background-color: #050508;
+            color: white;
+            font-family: 'Space Grotesk', sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background-color: #1a1a24;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 242, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .glass-panel {
+            background: rgba(10, 10, 15, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+        }
+
+        .scoreboard {
+            display: flex;
+            justify-content: space-between;
+            width: 90%;
+            margin-top: 20px;
+            padding: 15px 30px;
+        }
+
+        .score-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .p1-score {
+            color: #00f2ff;
+            font-size: 42px;
+            font-weight: 900;
+            text-shadow: 0 0 15px rgba(0, 242, 255, 0.6);
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .p2-score {
+            color: #ff00c8;
+            font-size: 42px;
+            font-weight: 900;
+            text-shadow: 0 0 15px rgba(255, 0, 200, 0.6);
+            font-family: 'Outfit', sans-serif;
+        }
+
+        #center-text {
+            position: absolute;
+            top: 40%;
+            font-size: 84px;
+            font-weight: 900;
+            text-align: center;
+            text-transform: uppercase;
+            font-family: 'Outfit', sans-serif;
+            letter-spacing: -2px;
+            filter: drop-shadow(0 0 20px rgba(255,255,255,0.3));
+            opacity: 0;
+            transform: scale(0.5);
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        #center-text.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        #btn-restart {
+            pointer-events: auto;
+            margin-top: auto;
+            margin-bottom: 100px;
+            padding: 16px 48px;
+            font-size: 20px;
+            font-weight: 800;
+            cursor: pointer;
+            background: white;
+            color: black;
+            border: none;
+            border-radius: 50px;
+            box-shadow: 0 10px 30px rgba(255, 255, 255, 0.3);
+            display: none;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        #btn-restart:hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 15px 40px rgba(255, 255, 255, 0.5);
+            background: #f0f0f0;
+        }
+
+        #controls-info {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 40px;
+            box-sizing: border-box;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.4);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .kbd {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: rgba(255, 255, 255, 0.8);
+            margin: 0 2px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div id="ui-layer">
+            <div class="scoreboard glass-panel">
+                <div class="score-box">
+                    <span class="text-[10px] uppercase tracking-widest opacity-50">Player 1</span>
+                    <div class="p1-score" id="p1-score">0</div>
+                </div>
+                <div class="flex flex-col items-center justify-center">
+                    <div class="h-8 w-[1px] bg-white/20"></div>
+                </div>
+                <div class="score-box">
+                    <span class="text-[10px] uppercase tracking-widest opacity-50">Player 2</span>
+                    <div class="p2-score" id="p2-score">0</div>
+                </div>
+            </div>
+
+            <div id="center-text"></div>
+            
+            <button id="btn-restart" onclick="initGame()">Play Again</button>
+
+            <div id="controls-info">
+                <div>P1: <span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span></div>
+                <div>P2: <span class="kbd">↑</span><span class="kbd">←</span><span class="kbd">↓</span><span class="kbd">→</span></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const centerText = document.getElementById('center-text');
+    const p1ScoreEl = document.getElementById('p1-score');
+    const p2ScoreEl = document.getElementById('p2-score');
+    const restartBtn = document.getElementById('btn-restart');
+
+    // Game Constants
+    const MAX_SCORE = 5;
+    const P1_COLOR = '#00f2ff';
+    const P2_COLOR = '#ff00c8';
+    
+    // Game State
+    let p1Score = 0;
+    let p2Score = 0;
+    let gameState = 'MENU';
+    let stateTimer = 0;
+    let countdownValue = 3;
+    let screenShake = 0;
+    let camX = 0;
+    let camY = 0;
+
+    const keys = {};
+    const prevKeys = {};
+
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    let players = [];
+    let bullets = [];
+    let particles = [];
+
+    const platforms = [
+        { x: 0, y: 550, w: 800, h: 50, type: 'solid' }, // Ground
+        { x: -50, y: 0, w: 50, h: 600, type: 'solid' }, // Left Wall
+        { x: 800, y: 0, w: 50, h: 600, type: 'solid' }, // Right Wall
+        { x: 120, y: 400, w: 160, h: 12, type: 'jump-through' },
+        { x: 520, y: 400, w: 160, h: 12, type: 'jump-through' },
+        { x: 280, y: 250, w: 240, h: 12, type: 'jump-through' }
+    ];
+
+    class Particle {
+        constructor(x, y, color, speed, type) {
+            this.x = x;
+            this.y = y;
+            this.color = color;
+            this.vx = (Math.random() - 0.5) * speed;
+            this.vy = (Math.random() - 0.5) * speed;
+            this.life = 1.0;
+            this.type = type; // 'dust' or 'spark'
+            this.decay = 0.02 + Math.random() * 0.03;
+            this.size = type === 'spark' ? 2 + Math.random() * 3 : 4 + Math.random() * 4;
+        }
+
+        update() {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.life -= this.decay;
+            if (this.type === 'spark') {
+                this.vy += 0.15; // Gravity on sparks
+            } else {
+                this.vy -= 0.05; // Drift up for dust
+                this.vx *= 0.95;
+            }
+        }
+
+        draw(ctx) {
+            ctx.globalAlpha = this.life;
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x - this.size/2, this.y - this.size/2, this.size, this.size);
+            ctx.globalAlpha = 1.0;
+        }
+    }
+
+    class Bullet {
+        constructor(x, y, vx, ownerId, color) {
+            this.x = x;
+            this.y = y;
+            this.w = 14;
+            this.h = 4;
+            this.vx = vx;
+            this.ownerId = ownerId;
+            this.color = color;
+            this.markedForDeletion = false;
+        }
+
+        update() {
+            this.x += this.vx;
+            
+            // Wall Collision
+            if (this.x < 0 || this.x > 800) {
+                this.markedForDeletion = true;
+                spawnParticles(this.x, this.y, this.color, 8, 4, 'spark');
+            }
+
+            // Platform Collision (only solid)
+            platforms.forEach(p => {
+                if (p.type === 'solid' && isAABB(this, p)) {
+                    this.markedForDeletion = true;
+                    spawnParticles(this.x, this.y, this.color, 8, 4, 'spark');
+                }
+            });
+
+            // Player Collision
+            players.forEach(p => {
+                if (!p.dead && p.id !== this.ownerId && isAABB(this, p)) {
+                    this.markedForDeletion = true;
+                    handleHit(p.id);
+                }
+            });
+        }
+
+        draw(ctx) {
+            ctx.fillStyle = this.color;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = this.color;
+            ctx.fillRect(this.x, this.y, this.w, this.h);
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    class Player {
+        constructor(id, x, y, color, controls, facing) {
+            this.id = id;
+            this.x = x;
+            this.y = y;
+            this.w = 30;
+            this.h = 44;
+            this.color = color;
+            this.controls = controls;
+            this.facing = facing; // 1 or -1
+
+            this.vx = 0;
+            this.vy = 0;
+            this.acc = 0.8;
+            this.maxSpeed = 6;
+            this.fricGround = 0.85;
+            this.fricAir = 0.98;
+            this.gravity = 0.45;
+            this.jumpForce = -22;
+            this.terminalVelocity = 12;
+
+            this.grounded = false;
+            this.wasGrounded = false;
+            this.dead = false;
+            this.canShoot = true;
+            this.shootCooldown = 0;
+        }
+
+        update() {
+            if (this.dead || gameState !== 'PLAYING') {
+                this.vx *= this.fricGround;
+                this.vy += this.gravity;
+                this.y += this.vy;
+                this.handlePlatformCollisions();
+                return;
+            }
+
+            // Input
+            if (keys[this.controls.left]) {
+                this.vx -= this.acc;
+                this.facing = -1;
+            } else if (keys[this.controls.right]) {
+                this.vx += this.acc;
+                this.facing = 1;
+            } else {
+                this.vx *= (this.grounded ? this.fricGround : this.fricAir);
+            }
+
+            // Jump
+            if (keys[this.controls.jump] && this.grounded) {
+                this.vy = this.jumpForce;
+                this.grounded = false;
+                spawnParticles(this.x + this.w/2, this.y + this.h, '#fff', 5, 2, 'dust');
+            }
+
+            // Variable Jump Height
+            if (!keys[this.controls.jump] && this.vy < -3) {
+                this.vy *= 0.6;
+            }
+
+            // Shooting
+            if (keys[this.controls.shoot] && this.canShoot) {
+                const bulletX = this.facing === 1 ? this.x + this.w : this.x - 14;
+                bullets.push(new Bullet(bulletX, this.y + 18, this.facing * 12, this.id, this.color));
+                this.canShoot = false;
+                this.shootCooldown = 25;
+                spawnParticles(bulletX, this.y + 20, this.color, 4, 3, 'spark');
+                screenShake = Math.max(screenShake, 3);
+            }
+
+            if (this.shootCooldown > 0) {
+                this.shootCooldown--;
+            } else {
+                this.canShoot = true;
+            }
+
+            // Physics
+            this.vx = Math.max(Math.min(this.vx, this.maxSpeed), -this.maxSpeed);
+            this.vy += this.gravity;
+            if (this.vy > this.terminalVelocity) this.vy = this.terminalVelocity;
+
+            this.x += this.vx;
+            this.handlePlatformCollisions('x');
+            this.y += this.vy;
+            this.handlePlatformCollisions('y');
+
+            // Landing effect
+            if (this.grounded && !this.wasGrounded) {
+                spawnParticles(this.x + this.w/2, this.y + this.h, '#fff', 6, 2, 'dust');
+            }
+            this.wasGrounded = this.grounded;
+
+            // Bounds
+            if (this.x < 0) this.x = 0;
+            if (this.x + this.w > 800) this.x = 800 - this.w;
+        }
+
+        handlePlatformCollisions(axis) {
+            this.grounded = false;
+            platforms.forEach(p => {
+                if (p.type === 'solid') {
+                    if (isAABB(this, p)) {
+                        if (axis === 'x') {
+                            if (this.vx > 0) this.x = p.x - this.w;
+                            else if (this.vx < 0) this.x = p.x + p.w;
+                            this.vx = 0;
+                        } else {
+                            if (this.vy > 0) {
+                                this.y = p.y - this.h;
+                                this.vy = 0;
+                                this.grounded = true;
+                            } else if (this.vy < 0) {
+                                this.y = p.y + p.h;
+                                this.vy = 0;
+                            }
+                        }
+                    }
+                } else if (p.type === 'jump-through' && axis === 'y') {
+                    // Only collide if falling and was above
+                    if (this.vy >= 0 && this.y + this.h <= p.y + this.vy + 1 && this.y + this.h >= p.y - 5) {
+                        if (this.x + this.w > p.x && this.x < p.x + p.w) {
+                            // Check if player is NOT holding "down" to drop through (optional)
+                            if (!keys[this.controls.shoot]) { 
+                                this.y = p.y - this.h;
+                                this.vy = 0;
+                                this.grounded = true;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        draw(ctx) {
+            ctx.save();
+            if (this.dead) {
+                ctx.globalAlpha = 0.3;
+                ctx.translate(this.x + this.w/2, this.y + this.h/2);
+                ctx.rotate(Math.PI/2);
+                ctx.translate(-(this.x + this.w/2), -(this.y + this.h/2));
+            }
+
+            // Body
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = this.color;
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x, this.y, this.w, this.h);
+            ctx.shadowBlur = 0;
+
+            // Eyes/Face
+            ctx.fillStyle = 'white';
+            const eyeX = this.facing === 1 ? this.x + 18 : this.x + 6;
+            ctx.fillRect(eyeX, this.y + 10, 8, 4);
+
+            // Weapon
+            ctx.fillStyle = '#444';
+            const gunX = this.facing === 1 ? this.x + 20 : this.x - 10;
+            ctx.fillRect(gunX, this.y + 20, 20, 8);
+
+            ctx.restore();
+        }
+    }
+
+    function isAABB(r1, r2) {
+        return r1.x < r2.x + r2.w &&
+               r1.x + r1.w > r2.x &&
+               r1.y < r2.y + r2.h &&
+               r1.y + r1.h > r2.y;
+    }
+
+    function spawnParticles(x, y, color, count, speed, type) {
+        for (let i = 0; i < count; i++) {
+            particles.push(new Particle(x, y, color, speed, type));
+        }
+    }
+
+    function handleHit(hitId) {
+        const victim = players.find(p => p.id === hitId);
+        const killer = players.find(p => p.id !== hitId);
+        
+        victim.dead = true;
+        screenShake = 15;
+        spawnParticles(victim.x + victim.w/2, victim.y + victim.h/2, victim.color, 30, 8, 'spark');
+        
+        if (killer.id === 1) p1Score++;
+        else p2Score++;
+        
+        updateScoreUI();
+        
+        gameState = 'ROUND_OVER';
+        stateTimer = 120;
+    }
+
+    function updateScoreUI() {
+        p1ScoreEl.innerText = p1Score;
+        p2ScoreEl.innerText = p2Score;
+    }
+
+    function showCenterText(txt, color = "white") {
+        centerText.innerText = txt;
+        centerText.style.color = color;
+        centerText.classList.add('show');
+    }
+
+    function hideCenterText() {
+        centerText.classList.remove('show');
+    }
+
+    function initGame() {
+        p1Score = 0;
+        p2Score = 0;
+        updateScoreUI();
+        restartBtn.style.display = 'none';
+        startRound();
+    }
+
+    function startRound() {
+        bullets = [];
+        particles = [];
+        players = [
+            new Player(1, 100, 400, P1_COLOR, { left: 'KeyA', right: 'KeyD', jump: 'KeyW', shoot: 'KeyS' }, 1),
+            new Player(2, 670, 400, P2_COLOR, { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', shoot: 'ArrowDown' }, -1)
+        ];
+        
+        gameState = 'COUNTDOWN';
+        countdownValue = 3;
+        stateTimer = 60;
+        showCenterText("3");
+    }
+
+    function gameLoop() {
+        updateLogic();
+        render();
+        requestAnimationFrame(gameLoop);
+    }
+
+    function updateLogic() {
+        if (gameState === 'COUNTDOWN') {
+            stateTimer--;
+            if (stateTimer <= 0) {
+                countdownValue--;
+                if (countdownValue > 0) {
+                    showCenterText(countdownValue);
+                    stateTimer = 60;
+                } else {
+                    showCenterText("FIGHT!", "#fff");
+                    gameState = 'PLAYING';
+                    stateTimer = 40;
+                }
+            }
+        } else if (gameState === 'PLAYING') {
+            if (stateTimer > 0) {
+                stateTimer--;
+                if (stateTimer === 0) hideCenterText();
+            }
+        } else if (gameState === 'ROUND_OVER') {
+            stateTimer--;
+            if (stateTimer <= 0) {
+                if (p1Score >= MAX_SCORE || p2Score >= MAX_SCORE) {
+                    gameState = 'GAME_OVER';
+                    const winner = p1Score >= MAX_SCORE ? "PLAYER 1" : "PLAYER 2";
+                    const winCol = p1Score >= MAX_SCORE ? P1_COLOR : P2_COLOR;
+                    showCenterText(winner + " WINS!", winCol);
+                    restartBtn.style.display = 'block';
+                } else {
+                    startRound();
+                }
+            }
+        }
+
+        players.forEach(p => p.update());
+        bullets.forEach(b => b.update());
+        bullets = bullets.filter(b => !b.markedForDeletion);
+        particles.forEach(p => p.update());
+        particles = particles.filter(p => p.life > 0);
+
+        // Shake decay
+        if (screenShake > 0) screenShake *= 0.9;
+        
+        // Camera (Simple follow center)
+        let targetCamX = 0;
+        let targetCamY = 0;
+        if (players.length === 2) {
+            const centerX = (players[0].x + players[1].x) / 2;
+            targetCamX = (400 - centerX) * 0.05;
+        }
+        camX += (targetCamX - camX) * 0.1;
+    }
+
+    function render() {
+        ctx.fillStyle = '#1a1a24';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.save();
+        
+        // Screen Shake & Camera
+        const shakeX = (Math.random() - 0.5) * screenShake;
+        const shakeY = (Math.random() - 0.5) * screenShake;
+        ctx.translate(camX + shakeX, shakeY);
+
+        // Grid Background
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 800; i += 40) {
+            ctx.beginPath();
+            ctx.moveTo(i, 0);
+            ctx.lineTo(i, 600);
+            ctx.stroke();
+        }
+        for (let i = 0; i < 600; i += 40) {
+            ctx.beginPath();
+            ctx.moveTo(0, i);
+            ctx.lineTo(800, i);
+            ctx.stroke();
+        }
+
+        // Platforms
+        platforms.forEach(p => {
+            if (p.type === 'solid') {
+                ctx.fillStyle = '#0a0a0f';
+                ctx.fillRect(p.x, p.y, p.w, p.h);
+                ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                ctx.strokeRect(p.x, p.y, p.w, p.h);
+            } else {
+                const gradient = ctx.createLinearGradient(p.x, p.y, p.x, p.y + p.h);
+                gradient.addColorStop(0, 'rgba(255,255,255,0.2)');
+                gradient.addColorStop(1, 'rgba(255,255,255,0.05)');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(p.x, p.y, p.w, p.h);
+                ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                ctx.fillRect(p.x, p.y, p.w, 2);
+            }
+        });
+
+        particles.forEach(p => p.draw(ctx));
+        bullets.forEach(b => b.draw(ctx));
+        players.forEach(p => p.draw(ctx));
+
+        ctx.restore();
+    }
+
+    initGame();
+    gameLoop();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Swap Arena</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #050509;
+            --p1-glow: #00f2ff;
+            --p2-glow: #ff00ff;
+            --accent: #ffffff;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: #fff;
+            font-family: 'Outfit', sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+            user-select: none;
+        }
+
+        #gameCanvas {
+            max-width: 100vw;
+            max-height: 100vh;
+            background-color: #050509;
+            box-shadow: 0 0 50px rgba(0, 242, 255, 0.05);
+            display: block;
+        }
+
+        .overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(5, 5, 9, 0.95);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+            visibility: hidden;
+        }
+
+        .title-neon {
+            font-weight: 900;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px rgba(0, 242, 255, 0.8), 0 0 20px rgba(255, 0, 255, 0.5);
+            background: linear-gradient(90deg, #00f2ff, #ff00ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: pulse 3s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.3) contrast(1.1); }
+        }
+
+        .btn-neon {
+            background: transparent;
+            color: #fff;
+            border: 2px solid #fff;
+            padding: 1rem 3rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-neon:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .controls-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .p1-color { color: var(--p1-glow); text-shadow: 0 0 10px var(--p1-glow); }
+        .p2-color { color: var(--p2-glow); text-shadow: 0 0 10px var(--p2-glow); }
+
+        kbd {
+            background: #222;
+            border-radius: 4px;
+            padding: 2px 8px;
+            border: 1px solid #444;
+            font-family: monospace;
+            margin: 0 2px;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas" width="1280" height="720"></canvas>
+
+    <!-- Main Menu Overlay -->
+    <div id="menu" class="overlay">
+        <h1 class="text-6xl md:text-8xl title-neon mb-4">TIME SWAP ARENA</h1>
+        <p class="text-gray-400 text-lg mb-12 max-w-2xl text-center px-6">
+            Two souls bound by a glitch in time. Survive the hazards. Lure your enemy to their doom. 
+            <span class="block mt-2 font-bold text-white">POSITIONS SWAP EVERY 5 SECONDS.</span>
+        </p>
+        
+        <div class="flex flex-col md:flex-row gap-8 mb-12">
+            <div class="controls-card border-cyan-500/30">
+                <h3 class="p1-color font-bold mb-4 uppercase tracking-widest">Player 1</h3>
+                <div class="space-y-2 text-sm">
+                    <p><kbd>W</kbd> JUMP</p>
+                    <p><kbd>A</kbd> <kbd>D</kbd> MOVE</p>
+                </div>
+            </div>
+            <div class="controls-card border-fuchsia-500/30">
+                <h3 class="p2-color font-bold mb-4 uppercase tracking-widest">Player 2</h3>
+                <div class="space-y-2 text-sm">
+                    <p><kbd>↑</kbd> JUMP</p>
+                    <p><kbd>←</kbd> <kbd>→</kbd> MOVE</p>
+                </div>
+            </div>
+        </div>
+
+        <button onclick="startGame()" class="btn-neon">Enter Arena</button>
+    </div>
+
+    <!-- Round Over Overlay -->
+    <div id="roundOver" class="overlay hidden">
+        <h1 id="winnerText" class="text-6xl font-black mb-8">PLAYER 1 WINS!</h1>
+        <button onclick="nextLevel()" class="btn-neon">Proceed to Next Tier</button>
+    </div>
+
+    <!-- Victory Overlay -->
+    <div id="victory" class="overlay hidden">
+        <h1 class="text-7xl title-neon mb-4">ABSOLUTE CHAMPION</h1>
+        <p class="text-gray-400 mb-12 text-center max-w-md">The arena has been conquered. Your dominance is recorded in the neon streams.</p>
+        <button onclick="resetGame()" class="btn-neon">Reset Simulation</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const menu = document.getElementById('menu');
+        const roundOver = document.getElementById('roundOver');
+        const victory = document.getElementById('victory');
+        const winnerText = document.getElementById('winnerText');
+
+        // Game Configuration
+        const WIDTH = 1280;
+        const HEIGHT = 720;
+        const SWAP_TIME = 5000;
+        const GRAVITY = 0.6;
+        const FRICTION = 0.85;
+        const ACCEL = 1.2;
+        const JUMP_FORCE = -15;
+
+        let gameState = 'MENU';
+        let currentLevel = 0;
+        let swapTimer = SWAP_TIME;
+        let flashAlpha = 0;
+        let ripples = [];
+        let p1, p2;
+        const keys = {};
+
+        // Levels: plats: [x, y, w, h], spikes: [x, y, w, h, dir]
+        const LEVELS = [
+            { // Level 1: Basics
+                p1: [100, 500], p2: [1100, 500],
+                plats: [[0, 600, 1280, 120]],
+                spikes: [[600, 570, 80, 30, 'up']]
+            },
+            { // Level 2: The Pit
+                p1: [150, 400], p2: [1050, 400],
+                plats: [[50, 500, 400, 40], [830, 500, 400, 40], [540, 300, 200, 30]],
+                spikes: [[540, 270, 200, 30, 'up']]
+            },
+            { // Level 3: Verticality
+                p1: [100, 600], p2: [1100, 600],
+                plats: [[0, 680, 1280, 40], [200, 500, 200, 30], [880, 500, 200, 30], [500, 350, 280, 30], [200, 200, 200, 30], [880, 200, 200, 30]],
+                spikes: [[200, 470, 200, 30, 'up'], [880, 470, 200, 30, 'up'], [500, 320, 280, 30, 'up']]
+            },
+            { // Level 4: The Squeeze
+                p1: [100, 100], p2: [1100, 100],
+                plats: [[0, 200, 300, 30], [980, 200, 300, 30], [400, 400, 480, 30], [0, 600, 300, 30], [980, 600, 300, 30]],
+                spikes: [[400, 430, 480, 30, 'down'], [400, 370, 480, 30, 'up']]
+            },
+            { // Level 5: Pillars
+                p1: [100, 500], p2: [1100, 500],
+                plats: [[50, 550, 150, 170], [350, 450, 150, 270], [650, 450, 150, 270], [950, 550, 150, 170]],
+                spikes: [[50, 520, 150, 30, 'up'], [950, 520, 150, 30, 'up'], [500, 690, 150, 30, 'up']]
+            },
+            { // Level 6: Gauntlet
+                p1: [50, 300], p2: [1180, 300],
+                plats: [[0, 400, 200, 320], [1080, 400, 200, 320], [400, 550, 480, 40]],
+                spikes: [[400, 520, 480, 30, 'up'], [200, 690, 880, 30, 'up'], [0, 0, 1280, 30, 'down']]
+            },
+            { // Level 7: Mirror Precision
+                p1: [300, 300], p2: [980, 300],
+                plats: [[250, 400, 150, 30], [880, 400, 150, 30], [540, 200, 200, 30], [540, 600, 200, 30]],
+                spikes: [[250, 370, 150, 30, 'up'], [880, 370, 150, 30, 'up'], [540, 170, 200, 30, 'up'], [540, 630, 200, 30, 'down']]
+            },
+            { // Level 8: Final Arena
+                p1: [100, 100], p2: [1100, 100],
+                plats: [[0, 200, 200, 30], [1080, 200, 200, 30], [400, 400, 100, 30], [780, 400, 100, 30], [590, 600, 100, 30]],
+                spikes: [[0, 700, 1280, 20, 'up'], [400, 370, 100, 30, 'up'], [780, 370, 100, 30, 'up'], [590, 570, 100, 30, 'up']]
+            }
+        ];
+
+        class Player {
+            constructor(x, y, color, controls) {
+                this.x = x;
+                this.y = y;
+                this.w = 40;
+                this.h = 60;
+                this.vx = 0;
+                this.vy = 0;
+                this.color = color;
+                this.controls = controls; // {up, left, right}
+                this.onGround = false;
+                this.coyoteTime = 0;
+                this.jumpBuffer = 0;
+            }
+
+            update(dt) {
+                // Input
+                if (keys[this.controls.left]) this.vx -= ACCEL;
+                if (keys[this.controls.right]) this.vx += ACCEL;
+
+                // Physics
+                this.vy += GRAVITY;
+                this.vx *= FRICTION;
+                
+                // Horizontal Move
+                this.x += this.vx;
+                this.collide(true);
+
+                // Vertical Move
+                this.y += this.vy;
+                this.onGround = false;
+                this.collide(false);
+
+                // Counters
+                if (this.onGround) this.coyoteTime = 10;
+                else this.coyoteTime--;
+
+                if (keys[this.controls.up]) this.jumpBuffer = 10;
+                else this.jumpBuffer--;
+
+                if (this.jumpBuffer > 0 && this.coyoteTime > 0) {
+                    this.vy = JUMP_FORCE;
+                    this.onGround = false;
+                    this.coyoteTime = 0;
+                    this.jumpBuffer = 0;
+                }
+
+                // Bounds
+                if (this.x < 0) { this.x = 0; this.vx = 0; }
+                if (this.x + this.w > WIDTH) { this.x = WIDTH - this.w; this.vx = 0; }
+            }
+
+            collide(isX) {
+                const level = LEVELS[currentLevel];
+                for (let p of level.plats) {
+                    if (this.x < p[0] + p[2] && this.x + this.w > p[0] &&
+                        this.y < p[1] + p[3] && this.y + this.h > p[1]) {
+                        if (isX) {
+                            if (this.vx > 0) this.x = p[0] - this.w;
+                            else if (this.vx < 0) this.x = p[0] + p[2];
+                            this.vx = 0;
+                        } else {
+                            if (this.vy > 0) {
+                                this.y = p[1] - this.h;
+                                this.onGround = true;
+                            } else if (this.vy < 0) {
+                                this.y = p[1] + p[3];
+                            }
+                            this.vy = 0;
+                        }
+                    }
+                }
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.w, this.h);
+                // Detail
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                ctx.fillRect(this.x + 5, this.y + 10, this.w - 10, 5);
+                ctx.restore();
+            }
+        }
+
+        function createRipple(x, y, color) {
+            ripples.push({ x: x + 20, y: y + 30, r: 0, alpha: 1, color: color });
+        }
+
+        function checkHazards(p) {
+            if (p.y > HEIGHT + 100) return true;
+            const level = LEVELS[currentLevel];
+            const margin = 8;
+            for (let s of level.spikes) {
+                if (p.x + margin < s[0] + s[2] && p.x + p.w - margin > s[0] &&
+                    p.y + margin < s[1] + s[3] && p.y + p.h - margin > s[1]) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function initLevel() {
+            const l = LEVELS[currentLevel];
+            p1 = new Player(l.p1[0], l.p1[1], '#00f2ff', { up: 'KeyW', left: 'KeyA', right: 'KeyD' });
+            p2 = new Player(l.p2[0], l.p2[1], '#ff00ff', { up: 'ArrowUp', left: 'ArrowLeft', right: 'ArrowRight' });
+            swapTimer = SWAP_TIME;
+            ripples = [];
+            flashAlpha = 0;
+        }
+
+        function startGame() {
+            menu.classList.add('hidden');
+            roundOver.classList.add('hidden');
+            victory.classList.add('hidden');
+            currentLevel = 0;
+            initLevel();
+            gameState = 'PLAYING';
+        }
+
+        function endRound(winner) {
+            gameState = 'ROUND_OVER';
+            winnerText.innerText = winner === 'TIE' ? "GLITCH: MUTUAL DESTRUCTION" : `${winner} WINS!`;
+            winnerText.className = winner === 'PLAYER 1' ? 'text-6xl font-black mb-8 p1-color' : 
+                                  winner === 'PLAYER 2' ? 'text-6xl font-black mb-8 p2-color' : 
+                                  'text-6xl font-black mb-8 text-white';
+            roundOver.classList.remove('hidden');
+        }
+
+        function nextLevel() {
+            currentLevel++;
+            if (currentLevel >= LEVELS.length) {
+                gameState = 'VICTORY';
+                roundOver.classList.add('hidden');
+                victory.classList.remove('hidden');
+            } else {
+                initLevel();
+                roundOver.classList.add('hidden');
+                gameState = 'PLAYING';
+            }
+        }
+
+        function resetGame() {
+            victory.classList.add('hidden');
+            menu.classList.remove('hidden');
+            gameState = 'MENU';
+        }
+
+        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keyup', e => keys[e.code] = false);
+
+        function updatePhysics(step) {
+            if (gameState !== 'PLAYING') return;
+
+            p1.update(step);
+            p2.update(step);
+
+            // Swap logic
+            swapTimer -= step;
+            if (swapTimer <= 0) {
+                createRipple(p1.x, p1.y, p1.color);
+                createRipple(p2.x, p2.y, p2.color);
+
+                const tx = p1.x; const ty = p1.y;
+                p1.x = p2.x; p1.y = p2.y;
+                p2.x = tx; p2.y = ty;
+                p1.vx = 0; p1.vy = 0;
+                p2.vx = 0; p2.vy = 0;
+
+                createRipple(p1.x, p1.y, p1.color);
+                createRipple(p2.x, p2.y, p2.color);
+
+                swapTimer = SWAP_TIME;
+                flashAlpha = 1.0;
+            }
+
+            // Hazards
+            const p1Dead = checkHazards(p1);
+            const p2Dead = checkHazards(p2);
+
+            if (p1Dead && p2Dead) endRound('TIE');
+            else if (p1Dead) endRound('PLAYER 2');
+            else if (p2Dead) endRound('PLAYER 1');
+
+            // Visuals
+            for (let i = ripples.length - 1; i >= 0; i--) {
+                ripples[i].r += 10;
+                ripples[i].alpha -= 0.04;
+                if (ripples[i].alpha <= 0) ripples.splice(i, 1);
+            }
+            if (flashAlpha > 0) flashAlpha -= 0.05;
+        }
+
+        function draw() {
+            // Background
+            ctx.fillStyle = '#050509';
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+            if (gameState === 'MENU') return;
+
+            const l = LEVELS[currentLevel];
+
+            // Draw Platforms
+            l.plats.forEach(p => {
+                ctx.strokeStyle = '#00f2ff';
+                ctx.lineWidth = 2;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#00f2ff';
+                ctx.strokeRect(p[0], p[1], p[2], p[3]);
+                ctx.fillStyle = 'rgba(0, 242, 255, 0.05)';
+                ctx.fillRect(p[0], p[1], p[2], p[3]);
+                ctx.shadowBlur = 0;
+            });
+
+            // Draw Spikes
+            l.spikes.forEach(s => {
+                ctx.fillStyle = '#ff3333';
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#ff0000';
+                ctx.beginPath();
+                if (s[4] === 'up') {
+                    ctx.moveTo(s[0], s[1] + s[3]);
+                    ctx.lineTo(s[0] + s[2] / 2, s[1]);
+                    ctx.lineTo(s[0] + s[2], s[1] + s[3]);
+                } else {
+                    ctx.moveTo(s[0], s[1]);
+                    ctx.lineTo(s[0] + s[2] / 2, s[1] + s[3]);
+                    ctx.lineTo(s[0] + s[2], s[1]);
+                }
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+
+            // Draw Ripples
+            ripples.forEach(r => {
+                ctx.strokeStyle = r.color;
+                ctx.lineWidth = 4;
+                ctx.globalAlpha = r.alpha;
+                ctx.beginPath();
+                ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+            });
+
+            // Draw Players
+            p1.draw(ctx);
+            p2.draw(ctx);
+
+            // Draw Flash
+            if (flashAlpha > 0) {
+                ctx.fillStyle = `rgba(255,255,255,${flashAlpha * 0.3})`;
+                ctx.fillRect(0, 0, WIDTH, HEIGHT);
+            }
+
+            drawHUD();
+        }
+
+        function drawHUD() {
+            ctx.font = '900 24px Outfit';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.fillText(`LEVEL 0${currentLevel + 1}`, WIDTH / 2, 40);
+
+            // Timer Ring
+            const timerX = WIDTH / 2;
+            const timerY = 100;
+            const timerR = 40;
+            const progress = (swapTimer / SWAP_TIME);
+
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.beginPath();
+            ctx.arc(timerX, timerY, timerR, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#fff';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#fff';
+            ctx.beginPath();
+            ctx.arc(timerX, timerY, timerR, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * progress));
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 32px Outfit';
+            ctx.fillText(Math.ceil(swapTimer / 1000), timerX, timerY + 12);
+
+            // Lower HUD
+            ctx.font = '700 16px Outfit';
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#00f2ff';
+            ctx.fillText('P1: W/A/D', 40, HEIGHT - 30);
+            
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#ff00ff';
+            ctx.fillText('P2: ARROWS', WIDTH - 40, HEIGHT - 30);
+        }
+
+        let lastTime = 0;
+        let accumulator = 0;
+        const step = 1000 / 60;
+
+        function loop(time) {
+            const dt = time - lastTime;
+            lastTime = time;
+            
+            accumulator += Math.min(dt, 100);
+
+            while (accumulator >= step) {
+                updatePhysics(step);
+                accumulator -= step;
+            }
+
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        requestAnimationFrame(loop);
+    </script>
+</body>
+</html>

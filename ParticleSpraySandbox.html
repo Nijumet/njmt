@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Particle Sandbox</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        neon: {
+                            cyan: '#00f2ff',
+                            magenta: '#ff00ff',
+                            purple: '#bc13fe',
+                            blue: '#4d4dff',
+                            lime: '#39ff14',
+                            yellow: '#fbff00'
+                        },
+                        dark: {
+                            900: '#050505',
+                            800: '#0a0a0a',
+                            700: '#121212'
+                        }
+                    },
+                    fontFamily: {
+                        display: ['Space Grotesk', 'sans-serif'],
+                        body: ['Outfit', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --neon-cyan: #00f2ff;
+            --neon-magenta: #ff00ff;
+            --panel-bg: rgba(10, 10, 10, 0.85);
+            --border-glow: 0 0 15px rgba(0, 242, 255, 0.3);
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #050505;
+            color: white;
+            font-family: 'Outfit', sans-serif;
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+        }
+
+        .neon-border {
+            border: 1px solid var(--neon-cyan);
+            box-shadow: var(--border-glow);
+        }
+
+        .btn-neon {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .btn-neon:hover {
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 15px rgba(0, 242, 255, 0.4);
+            transform: translateY(-1px);
+            color: var(--neon-cyan);
+        }
+
+        .btn-neon.active {
+            background: var(--neon-cyan);
+            color: black;
+            box-shadow: 0 0 20px var(--neon-cyan);
+        }
+
+        .btn-danger:hover {
+            border-color: var(--neon-magenta);
+            box-shadow: 0 0 15px rgba(255, 0, 255, 0.4);
+            color: var(--neon-magenta);
+        }
+
+        #splash {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: #050505;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 1s ease-out;
+        }
+
+        .pulse-text {
+            animation: pulse 2s infinite;
+            text-shadow: 0 0 20px var(--neon-cyan);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(0.98); }
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--neon-cyan);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--neon-cyan);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--neon-cyan); }
+    </style>
+</head>
+<body>
+
+    <div id="splash">
+        <h1 class="text-5xl md:text-7xl font-display font-bold text-neon-cyan pulse-text mb-4">NEON SANDBOX</h1>
+        <div class="w-48 h-1 bg-dark-700 rounded-full overflow-hidden">
+            <div class="h-full bg-neon-cyan w-1/3 animate-[loading_2s_infinite_linear]"></div>
+        </div>
+        <p class="mt-6 text-dark-400 font-body tracking-widest text-sm uppercase">Initializing Physics Core...</p>
+    </div>
+
+    <div id="ui-root" class="fixed inset-0 pointer-events-none z-50 flex flex-col p-4 md:p-8">
+        <!-- Top Bar -->
+        <header class="flex justify-between items-center pointer-events-auto">
+            <div class="flex items-baseline gap-4">
+                <h2 class="text-2xl font-display font-bold text-neon-cyan tracking-tighter">NEON<span class="text-white opacity-50 font-light">SANDBOX</span></h2>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="ui.showMenu('menu-presets')" class="btn-neon px-4 py-2 glass-panel rounded-lg">Presets</button>
+                <button onclick="ui.showMenu('menu-saves')" class="btn-neon px-4 py-2 glass-panel rounded-lg">Library</button>
+                <button onclick="ui.saveCurrent()" class="btn-neon px-4 py-2 glass-panel rounded-lg border-neon-cyan/50">Save</button>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="flex-1 flex items-end justify-between gap-6 py-8">
+            <!-- Left: Tool Palette -->
+            <div class="flex flex-col gap-2 pointer-events-auto">
+                <div class="glass-panel p-2 rounded-2xl flex flex-col gap-2">
+                    <button id="tool-emitter" onclick="engine.setTool('emitter')" class="btn-neon w-12 h-12 rounded-xl flex items-center justify-center text-xl" title="Emitter">✴</button>
+                    <button id="tool-well" onclick="engine.setTool('well')" class="btn-neon w-12 h-12 rounded-xl flex items-center justify-center text-xl" title="Gravity Well">◎</button>
+                    <button id="tool-repulsor" onclick="engine.setTool('repulsor')" class="btn-neon w-12 h-12 rounded-xl flex items-center justify-center text-xl" title="Repulsor">⊙</button>
+                    <button id="tool-wind" onclick="engine.setTool('wind')" class="btn-neon w-12 h-12 rounded-xl flex items-center justify-center text-xl" title="Wind">≋</button>
+                    <button id="tool-field" onclick="engine.setTool('field')" class="btn-neon w-12 h-12 rounded-xl flex items-center justify-center text-xl" title="Color Field">回</button>
+                    <button id="tool-bomb" onclick="engine.setTool('bomb')" class="btn-neon w-12 h-12 rounded-xl flex items-center justify-center text-xl" title="Pulse Bomb">☢</button>
+                    <button id="tool-barrier" onclick="engine.setTool('barrier')" class="btn-neon w-12 h-12 rounded-xl flex items-center justify-center text-xl" title="Barrier">⎯</button>
+                    <div class="h-px bg-white/10 mx-2 my-1"></div>
+                    <button onclick="engine.clear()" class="btn-neon btn-danger w-12 h-12 rounded-xl flex items-center justify-center text-xl" title="Clear All">✕</button>
+                </div>
+            </div>
+
+            <!-- Right: Inspector (Hidden by default) -->
+            <div id="inspector" class="glass-panel w-72 rounded-2xl pointer-events-auto hidden flex flex-col max-h-[70vh]">
+                <div class="p-4 border-b border-white/10 flex justify-between items-center">
+                    <span class="text-xs font-bold uppercase tracking-widest text-neon-cyan" id="ins-title">Properties</span>
+                    <button onclick="ui.deleteSelected()" class="text-xs text-neon-magenta hover:underline">Delete</button>
+                </div>
+                <div id="ins-content" class="p-4 overflow-y-auto custom-scrollbar space-y-4">
+                    <!-- Dynamic Controls -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="menu-presets" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden items-center justify-center p-6">
+        <div class="glass-panel w-full max-w-lg rounded-3xl p-8 neon-border pointer-events-auto">
+            <h3 class="text-2xl font-display font-bold mb-6">Simulation Presets</h3>
+            <div class="grid grid-cols-2 gap-4">
+                <button onclick="engine.loadPreset('galaxy')" class="btn-neon p-6 rounded-2xl text-left border-white/10">
+                    <div class="text-neon-cyan font-bold mb-1">Neon Galaxy</div>
+                    <div class="text-[10px] opacity-60 normal-case tracking-normal">Swirling orbital gravitational dance.</div>
+                </button>
+                <button onclick="engine.loadPreset('storm')" class="btn-neon p-6 rounded-2xl text-left border-white/10">
+                    <div class="text-neon-magenta font-bold mb-1">Storm Pulse</div>
+                    <div class="text-[10px] opacity-60 normal-case tracking-normal">High-velocity directional chaos.</div>
+                </button>
+                <button onclick="engine.loadPreset('garden')" class="btn-neon p-6 rounded-2xl text-left border-white/10">
+                    <div class="text-neon-lime font-bold mb-1">Color Garden</div>
+                    <div class="text-[10px] opacity-60 normal-case tracking-normal">Prismatic fields and gentle drifts.</div>
+                </button>
+                <button onclick="engine.loadPreset('reactor')" class="btn-neon p-6 rounded-2xl text-left border-white/10">
+                    <div class="text-neon-yellow font-bold mb-1">Chaos Reactor</div>
+                    <div class="text-[10px] opacity-60 normal-case tracking-normal">Violent pulses and tight constraints.</div>
+                </button>
+            </div>
+            <button onclick="ui.closeMenus()" class="mt-8 w-full py-3 text-sm font-bold uppercase opacity-50 hover:opacity-100 transition-opacity">Close</button>
+        </div>
+    </div>
+
+    <div id="menu-saves" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden items-center justify-center p-6">
+        <div class="glass-panel w-full max-w-lg rounded-3xl p-8 neon-border pointer-events-auto">
+            <h3 class="text-2xl font-display font-bold mb-6">Saved Scenes</h3>
+            <div id="save-list" class="space-y-3 max-h-64 overflow-y-auto custom-scrollbar pr-2">
+                <!-- Saves populated here -->
+            </div>
+            <button onclick="ui.closeMenus()" class="mt-8 w-full py-3 text-sm font-bold uppercase opacity-50 hover:opacity-100 transition-opacity">Close</button>
+        </div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        // --- UTILS & CONSTANTS ---
+        const COLORS = {
+            cyan: '#00f2ff',
+            magenta: '#ff00ff',
+            purple: '#bc13fe',
+            blue: '#4d4dff',
+            white: '#ffffff',
+            lime: '#39ff14',
+            yellow: '#fbff00'
+        };
+
+        const randomColor = () => {
+            const keys = Object.keys(COLORS);
+            return COLORS[keys[Math.floor(Math.random() * keys.length)]];
+        };
+
+        const dist = (x1, y1, x2, y2) => Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+
+        // --- PARTICLE ENGINE ---
+        class Particle {
+            constructor(x, y, vx, vy, color, size, life) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.color = color;
+                this.size = size;
+                this.maxLife = life;
+                this.life = life;
+                this.history = [];
+                this.maxHistory = Math.floor(Math.random() * 5) + 3;
+            }
+
+            update(friction, timeScale) {
+                this.history.unshift({ x: this.x, y: this.y });
+                if (this.history.length > this.maxHistory) this.history.pop();
+
+                this.vx *= friction;
+                this.vy *= friction;
+                this.x += this.vx * timeScale;
+                this.y += this.vy * timeScale;
+                this.life -= 1;
+            }
+
+            draw(ctx) {
+                const alpha = this.life / this.maxLife;
+                ctx.beginPath();
+                ctx.strokeStyle = this.color;
+                ctx.globalAlpha = alpha;
+                ctx.lineWidth = this.size;
+                ctx.lineCap = 'round';
+                
+                if (this.history.length > 0) {
+                    ctx.moveTo(this.history[0].x, this.history[0].y);
+                    for (let i = 1; i < this.history.length; i++) {
+                        ctx.lineTo(this.history[i].x, this.history[i].y);
+                    }
+                } else {
+                    ctx.moveTo(this.x, this.y);
+                    ctx.lineTo(this.x - this.vx, this.y - this.vy);
+                }
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        // --- PHYSICS OBJECTS ---
+        class BaseObject {
+            constructor(type, x, y) {
+                this.id = Math.random().toString(36).substr(2, 9);
+                this.type = type;
+                this.x = x;
+                this.y = y;
+                this.color = COLORS.cyan;
+                this.radius = 40;
+                this.strength = 1;
+                this.selected = false;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.selected ? 12 : 8, 0, Math.PI * 2);
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 2;
+                if (!this.selected) ctx.setLineDash([4, 4]);
+                ctx.stroke();
+                
+                // Glow
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            getControls() { return []; }
+            apply(p) {}
+            update() {}
+        }
+
+        class Emitter extends BaseObject {
+            constructor(x, y) {
+                super('emitter', x, y);
+                this.rate = 2;
+                this.speed = 4;
+                this.spread = 0.5;
+                this.angle = 0;
+                this.pSize = 2;
+                this.pLife = 100;
+                this.timer = 0;
+            }
+
+            update(engine) {
+                this.timer += this.rate;
+                while (this.timer >= 1 && engine.particles.length < engine.settings.maxParticles) {
+                    const a = this.angle + (Math.random() - 0.5) * this.spread;
+                    const vx = Math.cos(a) * this.speed;
+                    const vy = Math.sin(a) * this.speed;
+                    engine.particles.push(new Particle(this.x, this.y, vx, vy, this.color, this.pSize, this.pLife));
+                    this.timer -= 1;
+                }
+            }
+
+            getControls() {
+                return [
+                    { label: 'Rate', prop: 'rate', min: 0.1, max: 10, step: 0.1 },
+                    { label: 'Speed', prop: 'speed', min: 0, max: 20, step: 0.5 },
+                    { label: 'Angle', prop: 'angle', min: -Math.PI, max: Math.PI, step: 0.1 },
+                    { label: 'Spread', prop: 'spread', min: 0, max: Math.PI * 2, step: 0.1 },
+                    { label: 'Size', prop: 'pSize', min: 1, max: 10, step: 1 },
+                    { label: 'Life', prop: 'pLife', min: 10, max: 500, step: 10 },
+                    { label: 'Color', prop: 'color', type: 'color' }
+                ];
+            }
+        }
+
+        class Well extends BaseObject {
+            constructor(x, y) {
+                super('well', x, y);
+                this.strength = 0.5;
+                this.radius = 200;
+            }
+
+            apply(p) {
+                const d = dist(this.x, this.y, p.x, p.y);
+                if (d < this.radius && d > 5) {
+                    const force = (1 - d / this.radius) * this.strength;
+                    const angle = Math.atan2(this.y - p.y, this.x - p.x);
+                    p.vx += Math.cos(angle) * force;
+                    p.vy += Math.sin(angle) * force;
+                }
+            }
+
+            getControls() {
+                return [
+                    { label: 'Strength', prop: 'strength', min: 0.1, max: 5, step: 0.1 },
+                    { label: 'Radius', prop: 'radius', min: 50, max: 1000, step: 10 },
+                    { label: 'Color', prop: 'color', type: 'color' }
+                ];
+            }
+        }
+
+        class Repulsor extends BaseObject {
+            constructor(x, y) {
+                super('repulsor', x, y);
+                this.strength = 0.5;
+                this.radius = 150;
+                this.color = COLORS.magenta;
+            }
+
+            apply(p) {
+                const d = dist(this.x, this.y, p.x, p.y);
+                if (d < this.radius && d > 1) {
+                    const force = (1 - d / this.radius) * this.strength;
+                    const angle = Math.atan2(p.y - this.y, p.x - this.x);
+                    p.vx += Math.cos(angle) * force;
+                    p.vy += Math.sin(angle) * force;
+                }
+            }
+
+            getControls() {
+                return [
+                    { label: 'Strength', prop: 'strength', min: 0.1, max: 5, step: 0.1 },
+                    { label: 'Radius', prop: 'radius', min: 50, max: 1000, step: 10 },
+                    { label: 'Color', prop: 'color', type: 'color' }
+                ];
+            }
+        }
+
+        class Wind extends BaseObject {
+            constructor(x, y) {
+                super('wind', x, y);
+                this.angle = 0;
+                this.strength = 0.2;
+                this.radius = 200;
+                this.color = COLORS.blue;
+            }
+
+            draw(ctx) {
+                super.draw(ctx);
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(this.x + Math.cos(this.angle) * 30, this.y + Math.sin(this.angle) * 30);
+                ctx.strokeStyle = this.color;
+                ctx.stroke();
+            }
+
+            apply(p) {
+                const d = dist(this.x, this.y, p.x, p.y);
+                if (d < this.radius) {
+                    const force = (1 - d / this.radius) * this.strength;
+                    p.vx += Math.cos(this.angle) * force;
+                    p.vy += Math.sin(this.angle) * force;
+                }
+            }
+
+            getControls() {
+                return [
+                    { label: 'Angle', prop: 'angle', min: -Math.PI, max: Math.PI, step: 0.1 },
+                    { label: 'Strength', prop: 'strength', min: 0.05, max: 2, step: 0.05 },
+                    { label: 'Radius', prop: 'radius', min: 50, max: 1000, step: 10 }
+                ];
+            }
+        }
+
+        class ColorField extends BaseObject {
+            constructor(x, y) {
+                super('field', x, y);
+                this.radius = 100;
+                this.color = COLORS.lime;
+            }
+
+            apply(p) {
+                if (dist(this.x, this.y, p.x, p.y) < this.radius) {
+                    p.color = this.color;
+                }
+            }
+
+            getControls() {
+                return [
+                    { label: 'Radius', prop: 'radius', min: 20, max: 500, step: 5 },
+                    { label: 'Color', prop: 'color', type: 'color' }
+                ];
+            }
+        }
+
+        class PulseBomb extends BaseObject {
+            constructor(x, y) {
+                super('bomb', x, y);
+                this.timer = 0;
+                this.period = 120;
+                this.wave = 0;
+                this.color = COLORS.yellow;
+            }
+
+            update() {
+                this.timer++;
+                if (this.timer >= this.period) {
+                    this.timer = 0;
+                    this.wave = 1;
+                }
+                if (this.wave > 0) {
+                    this.wave += 10;
+                    if (this.wave > 400) this.wave = 0;
+                }
+            }
+
+            apply(p) {
+                if (this.wave > 0) {
+                    const d = dist(this.x, this.y, p.x, p.y);
+                    if (Math.abs(d - this.wave) < 20) {
+                        const angle = Math.atan2(p.y - this.y, p.x - this.x);
+                        p.vx += Math.cos(angle) * 5;
+                        p.vy += Math.sin(angle) * 5;
+                    }
+                }
+            }
+
+            draw(ctx) {
+                super.draw(ctx);
+                if (this.wave > 0) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.wave, 0, Math.PI * 2);
+                    ctx.strokeStyle = this.color;
+                    ctx.globalAlpha = 1 - (this.wave / 400);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                }
+            }
+
+            getControls() {
+                return [
+                    { label: 'Freq (Frames)', prop: 'period', min: 30, max: 300, step: 10 },
+                    { label: 'Color', prop: 'color', type: 'color' }
+                ];
+            }
+        }
+
+        class Barrier extends BaseObject {
+            constructor(x, y) {
+                super('barrier', x, y);
+                this.x2 = x + 100;
+                this.y2 = y;
+                this.color = COLORS.white;
+            }
+
+            draw(ctx) {
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(this.x2, this.y2);
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 3;
+                if (this.selected) {
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = this.color;
+                }
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                // Handles
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 6, 0, Math.PI * 2);
+                ctx.arc(this.x2, this.y2, 6, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+
+            apply(p) {
+                // Line-segment collision
+                const x1 = this.x, y1 = this.y, x2 = this.x2, y2 = this.y2;
+                const px = p.x, py = p.y;
+                const pvx = p.vx, pvy = p.vy;
+
+                const l2 = (x2 - x1)**2 + (y2 - y1)**2;
+                if (l2 === 0) return;
+                let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+                t = Math.max(0, Math.min(1, t));
+                const projX = x1 + t * (x2 - x1);
+                const projY = y1 + t * (y2 - y1);
+                const d = dist(px, py, projX, projY);
+
+                if (d < 10) {
+                    const nx = (px - projX) / d;
+                    const ny = (py - projY) / d;
+                    const dot = pvx * nx + pvy * ny;
+                    p.vx -= 2 * dot * nx;
+                    p.vy -= 2 * dot * ny;
+                    p.x += nx * 10;
+                    p.y += ny * 10;
+                }
+            }
+
+            getControls() {
+                return [
+                    { label: 'Length X', prop: 'x2', min: -500, max: 1500, step: 10, relative: true },
+                    { label: 'Length Y', prop: 'y2', min: -500, max: 1500, step: 10, relative: true }
+                ];
+            }
+        }
+
+        // --- MAIN ENGINE ---
+        const engine = {
+            canvas: null,
+            ctx: null,
+            particles: [],
+            objects: [],
+            tool: 'emitter',
+            selectedObject: null,
+            isDragging: false,
+            dragTarget: null,
+            dragSecondary: false,
+            settings: {
+                maxParticles: 2000,
+                trailLength: 0.15,
+                friction: 0.99,
+                timeScale: 1
+            },
+
+            init() {
+                this.canvas = document.getElementById('canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+                this.initInteraction();
+                this.loop();
+                setTimeout(() => document.getElementById('splash').style.opacity = '0', 1000);
+                setTimeout(() => document.getElementById('splash').remove(), 2000);
+            },
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                if (window.innerWidth < 600) this.settings.maxParticles = 800;
+            },
+
+            setTool(t) {
+                this.tool = t;
+                document.querySelectorAll('.btn-neon').forEach(b => b.classList.remove('active'));
+                const btn = document.getElementById(`tool-${t}`);
+                if (btn) btn.classList.add('active');
+            },
+
+            clear() {
+                this.particles = [];
+                this.objects = [];
+                this.select(null);
+            },
+
+            addAt(x, y) {
+                let obj;
+                switch (this.tool) {
+                    case 'emitter': obj = new Emitter(x, y); break;
+                    case 'well': obj = new Well(x, y); break;
+                    case 'repulsor': obj = new Repulsor(x, y); break;
+                    case 'wind': obj = new Wind(x, y); break;
+                    case 'field': obj = new ColorField(x, y); break;
+                    case 'bomb': obj = new PulseBomb(x, y); break;
+                    case 'barrier': obj = new Barrier(x, y); break;
+                }
+                if (obj) {
+                    this.objects.push(obj);
+                    this.select(obj);
+                }
+            },
+
+            select(obj) {
+                this.objects.forEach(o => o.selected = false);
+                this.selectedObject = obj;
+                if (obj) {
+                    obj.selected = true;
+                    ui.updateInspector();
+                } else {
+                    document.getElementById('inspector').classList.add('hidden');
+                }
+            },
+
+            initInteraction() {
+                const getPos = (e) => {
+                    const touch = e.touches ? e.touches[0] : e;
+                    return { x: touch.clientX, y: touch.clientY };
+                };
+
+                const start = (e) => {
+                    if (e.target.closest('#ui-root')) return;
+                    const pos = getPos(e);
+                    
+                    // Check if clicking existing object
+                    let hit = null;
+                    for (let obj of this.objects) {
+                        if (obj.type === 'barrier') {
+                            if (dist(pos.x, pos.y, obj.x, obj.y) < 15) { hit = obj; this.dragSecondary = false; break; }
+                            if (dist(pos.x, pos.y, obj.x2, obj.y2) < 15) { hit = obj; this.dragSecondary = true; break; }
+                        } else if (dist(pos.x, pos.y, obj.x, obj.y) < 20) {
+                            hit = obj;
+                            break;
+                        }
+                    }
+
+                    if (hit) {
+                        this.select(hit);
+                        this.isDragging = true;
+                        this.dragTarget = hit;
+                    } else {
+                        this.addAt(pos.x, pos.y);
+                    }
+                };
+
+                const move = (e) => {
+                    if (!this.isDragging || !this.dragTarget) return;
+                    const pos = getPos(e);
+                    if (this.dragTarget.type === 'barrier' && this.dragSecondary) {
+                        this.dragTarget.x2 = pos.x;
+                        this.dragTarget.y2 = pos.y;
+                    } else {
+                        const dx = pos.x - this.dragTarget.x;
+                        const dy = pos.y - this.dragTarget.y;
+                        this.dragTarget.x = pos.x;
+                        this.dragTarget.y = pos.y;
+                        if (this.dragTarget.type === 'barrier') {
+                            this.dragTarget.x2 += dx;
+                            this.dragTarget.y2 += dy;
+                        }
+                    }
+                    ui.updateInspector();
+                };
+
+                const end = () => {
+                    this.isDragging = false;
+                    this.dragTarget = null;
+                };
+
+                window.addEventListener('mousedown', start);
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', end);
+                window.addEventListener('touchstart', start);
+                window.addEventListener('touchmove', move);
+                window.addEventListener('touchend', end);
+            },
+
+            update() {
+                this.objects.forEach(o => o.update(this));
+                
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const p = this.particles[i];
+                    this.objects.forEach(o => o.apply(p));
+                    p.update(this.settings.friction, this.settings.timeScale);
+                    
+                    if (p.life <= 0 || p.x < -100 || p.x > this.canvas.width + 100 || p.y < -100 || p.y > this.canvas.height + 100) {
+                        this.particles.splice(i, 1);
+                    }
+                }
+            },
+
+            draw() {
+                this.ctx.fillStyle = `rgba(5, 5, 5, ${1 - this.settings.trailLength})`;
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                this.ctx.globalCompositeOperation = 'lighter';
+                this.particles.forEach(p => p.draw(this.ctx));
+                this.ctx.globalCompositeOperation = 'source-over';
+                
+                this.objects.forEach(o => o.draw(this.ctx));
+            },
+
+            loop() {
+                this.update();
+                this.draw();
+                requestAnimationFrame(() => this.loop());
+            },
+
+            loadPreset(name) {
+                this.clear();
+                ui.closeMenus();
+                const midX = window.innerWidth / 2;
+                const midY = window.innerHeight / 2;
+
+                if (name === 'galaxy') {
+                    const center = new Well(midX, midY);
+                    center.radius = 600;
+                    center.strength = 1.2;
+                    this.objects.push(center);
+                    const e1 = new Emitter(midX - 200, midY);
+                    e1.angle = -Math.PI / 2; e1.speed = 6; e1.rate = 3;
+                    this.objects.push(e1);
+                    const e2 = new Emitter(midX + 200, midY);
+                    e2.angle = Math.PI / 2; e2.speed = 6; e2.rate = 3;
+                    this.objects.push(e2);
+                } else if (name === 'storm') {
+                    const w = new Wind(midX, midY);
+                    w.angle = 0; w.strength = 0.5; w.radius = 800;
+                    this.objects.push(w);
+                    const b = new PulseBomb(midX - 300, midY);
+                    b.period = 60;
+                    this.objects.push(b);
+                    const e = new Emitter(midX - 400, midY);
+                    e.rate = 5; e.speed = 10; e.color = COLORS.magenta;
+                    this.objects.push(e);
+                } else if (name === 'garden') {
+                    const f1 = new ColorField(midX - 150, midY - 150); f1.color = COLORS.lime; f1.radius = 200;
+                    const f2 = new ColorField(midX + 150, midY + 150); f2.color = COLORS.purple; f2.radius = 200;
+                    const f3 = new ColorField(midX + 150, midY - 150); f3.color = COLORS.yellow; f3.radius = 200;
+                    this.objects.push(f1, f2, f3);
+                    const e = new Emitter(midX, midY); e.rate = 4; e.spread = Math.PI * 2; e.speed = 2;
+                    this.objects.push(e);
+                } else if (name === 'reactor') {
+                    this.objects.push(new Barrier(midX - 200, midY - 200));
+                    this.objects[0].x2 = midX + 200; this.objects[0].y2 = midY - 200;
+                    this.objects.push(new Barrier(midX + 200, midY - 200));
+                    this.objects[1].x2 = midX + 200; this.objects[1].y2 = midY + 200;
+                    this.objects.push(new Barrier(midX + 200, midY + 200));
+                    this.objects[2].x2 = midX - 200; this.objects[2].y2 = midY + 200;
+                    this.objects.push(new Barrier(midX - 200, midY + 200));
+                    this.objects[3].x2 = midX - 200; this.objects[3].y2 = midY - 200;
+                    const e = new Emitter(midX, midY); e.spread = Math.PI * 2; e.rate = 5;
+                    this.objects.push(e);
+                    const b = new PulseBomb(midX, midY); b.period = 100;
+                    this.objects.push(b);
+                }
+            }
+        };
+
+        // --- UI CONTROLLER ---
+        const ui = {
+            init() {
+                engine.setTool('emitter');
+                this.renderSaveList();
+            },
+
+            showMenu(id) {
+                this.closeMenus();
+                document.getElementById(id).style.display = 'flex';
+            },
+
+            closeMenus() {
+                document.querySelectorAll('#menu-presets, #menu-saves').forEach(m => m.style.display = 'none');
+            },
+
+            updateInspector() {
+                const ins = document.getElementById('inspector');
+                const content = document.getElementById('ins-content');
+                const title = document.getElementById('ins-title');
+                
+                if (!engine.selectedObject) {
+                    ins.classList.add('hidden');
+                    return;
+                }
+
+                ins.classList.remove('hidden');
+                title.innerText = `${engine.selectedObject.type.toUpperCase()} Properties`;
+                content.innerHTML = '';
+
+                const controls = engine.selectedObject.getControls();
+                controls.forEach(ctrl => {
+                    const div = document.createElement('div');
+                    div.className = 'space-y-1';
+                    
+                    const label = document.createElement('label');
+                    label.className = 'text-[10px] uppercase font-bold text-white/40 block';
+                    label.innerText = ctrl.label;
+                    div.appendChild(label);
+
+                    if (ctrl.type === 'color') {
+                        const grid = document.createElement('div');
+                        grid.className = 'grid grid-cols-4 gap-2 pt-1';
+                        Object.entries(COLORS).forEach(([name, hex]) => {
+                            const cbtn = document.createElement('button');
+                            cbtn.className = `w-full aspect-square rounded-md border-2 ${engine.selectedObject.color === hex ? 'border-white' : 'border-transparent'}`;
+                            cbtn.style.backgroundColor = hex;
+                            cbtn.onclick = () => {
+                                engine.selectedObject.color = hex;
+                                this.updateInspector();
+                            };
+                            grid.appendChild(cbtn);
+                        });
+                        div.appendChild(grid);
+                    } else {
+                        const row = document.createElement('div');
+                        row.className = 'flex items-center gap-3';
+                        const input = document.createElement('input');
+                        input.type = 'range';
+                        input.min = ctrl.min;
+                        input.max = ctrl.max;
+                        input.step = ctrl.step;
+                        input.value = engine.selectedObject[ctrl.prop];
+                        input.oninput = (e) => {
+                            engine.selectedObject[ctrl.prop] = parseFloat(e.target.value);
+                            valDisplay.innerText = input.value;
+                        };
+                        
+                        const valDisplay = document.createElement('span');
+                        valDisplay.className = 'text-xs font-mono text-neon-cyan w-8 text-right';
+                        valDisplay.innerText = input.value;
+                        
+                        row.appendChild(input);
+                        row.appendChild(valDisplay);
+                        div.appendChild(row);
+                    }
+                    content.appendChild(div);
+                });
+            },
+
+            deleteSelected() {
+                if (engine.selectedObject) {
+                    engine.objects = engine.objects.filter(o => o.id !== engine.selectedObject.id);
+                    engine.select(null);
+                }
+            },
+
+            saveCurrent() {
+                const name = prompt("Name your masterpiece:", `Scene ${new Date().toLocaleTimeString()}`);
+                if (!name) return;
+                const data = {
+                    name,
+                    objects: engine.objects,
+                    settings: engine.settings
+                };
+                const saves = JSON.parse(localStorage.getItem('neon_saves') || '[]');
+                saves.push(data);
+                localStorage.setItem('neon_saves', JSON.stringify(saves));
+                this.renderSaveList();
+                alert("Scene saved to local library!");
+            },
+
+            renderSaveList() {
+                const list = document.getElementById('save-list');
+                const saves = JSON.parse(localStorage.getItem('neon_saves') || '[]');
+                list.innerHTML = saves.length ? '' : '<p class="text-center opacity-30 py-8">No saved scenes yet.</p>';
+                
+                saves.forEach((save, idx) => {
+                    const item = document.createElement('div');
+                    item.className = 'glass-panel p-4 rounded-xl flex justify-between items-center group';
+                    item.innerHTML = `
+                        <div>
+                            <div class="text-sm font-bold">${save.name}</div>
+                            <div class="text-[10px] opacity-40 uppercase">${save.objects.length} objects</div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="ui.loadScene(${idx})" class="btn-neon px-3 py-1 rounded-md text-[10px]">Load</button>
+                            <button onclick="ui.deleteScene(${idx})" class="btn-neon btn-danger px-3 py-1 rounded-md text-[10px]">✕</button>
+                        </div>
+                    `;
+                    list.appendChild(item);
+                });
+            },
+
+            loadScene(idx) {
+                const saves = JSON.parse(localStorage.getItem('neon_saves') || '[]');
+                const save = saves[idx];
+                if (!save) return;
+                
+                engine.clear();
+                save.objects.forEach(data => {
+                    let obj;
+                    switch(data.type) {
+                        case 'emitter': obj = new Emitter(data.x, data.y); break;
+                        case 'well': obj = new Well(data.x, data.y); break;
+                        case 'repulsor': obj = new Repulsor(data.x, data.y); break;
+                        case 'wind': obj = new Wind(data.x, data.y); break;
+                        case 'field': obj = new ColorField(data.x, data.y); break;
+                        case 'bomb': obj = new PulseBomb(data.x, data.y); break;
+                        case 'barrier': obj = new Barrier(data.x, data.y); break;
+                    }
+                    if (obj) {
+                        Object.assign(obj, data);
+                        engine.objects.push(obj);
+                    }
+                });
+                engine.settings = { ...save.settings };
+                this.closeMenus();
+            },
+
+            deleteScene(idx) {
+                if (confirm("Delete this scene?")) {
+                    const saves = JSON.parse(localStorage.getItem('neon_saves') || '[]');
+                    saves.splice(idx, 1);
+                    localStorage.setItem('neon_saves', JSON.stringify(saves));
+                    this.renderSaveList();
+                }
+            }
+        };
+
+        window.onload = () => {
+            engine.init();
+            ui.init();
+        };
+    </script>
+</body>
+</html>

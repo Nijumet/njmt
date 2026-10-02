@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<title>Kaleidoscope Drawer</title>
+
+<style>
+
+  body {
+
+    margin: 0;
+
+    background: #111;
+
+    color: #fff;
+
+    font-family: Arial, sans-serif;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+  }
+
+  h1 { margin: 10px; }
+
+  #controls {
+
+    margin-bottom: 10px;
+
+    display: flex;
+
+    gap: 15px;
+
+    align-items: center;
+
+  }
+
+  canvas {
+
+    background: #222;
+
+    border: 1px solid #444;
+
+    cursor: crosshair;
+
+  }
+
+</style>
+
+</head>
+
+<body>
+
+
+
+<h1>Kaleidoscope Drawer ✨</h1>
+
+
+
+<div id="controls">
+
+  <label>Color: <input type="color" id="colorPicker" value="#ffffff"></label>
+
+  <label>Size: <input type="range" id="sizePicker" min="1" max="20" value="3"></label>
+
+
+
+  <label>Symmetry:
+
+    <input type="range" id="symmetrySlider" min="0" max="20" value="6">
+
+  </label>
+
+
+
+  <button id="clearBtn">Clear</button>
+
+  <button id="saveBtn">Save as PNG</button>
+
+</div>
+
+
+
+<canvas id="canvas" width="800" height="600"></canvas>
+
+
+
+<script>
+
+const canvas = document.getElementById("canvas");
+
+const ctx = canvas.getContext("2d");
+
+
+
+let drawing = false;
+
+let lastX, lastY;
+
+
+
+function getPos(e) {
+
+  const rect = canvas.getBoundingClientRect();
+
+  return {
+
+    x: e.clientX - rect.left,
+
+    y: e.clientY - rect.top
+
+  };
+
+}
+
+
+
+function start(e) {
+
+  drawing = true;
+
+  const pos = getPos(e);
+
+  lastX = pos.x;
+
+  lastY = pos.y;
+
+}
+
+
+
+function stop() {
+
+  drawing = false;
+
+}
+
+
+
+function draw(e) {
+
+  if (!drawing) return;
+
+
+
+  const pos = getPos(e);
+
+  const x = pos.x;
+
+  const y = pos.y;
+
+
+
+  const cx = canvas.width / 2;
+
+  const cy = canvas.height / 2;
+
+
+
+  const dx1 = lastX - cx;
+
+  const dy1 = lastY - cy;
+
+  const dx2 = x - cx;
+
+  const dy2 = y - cy;
+
+
+
+  const symmetry = parseInt(document.getElementById("symmetrySlider").value);
+
+  const color = document.getElementById("colorPicker").value;
+
+  const size = document.getElementById("sizePicker").value;
+
+
+
+  ctx.strokeStyle = color;
+
+  ctx.lineWidth = size;
+
+  ctx.lineCap = "round";
+
+
+
+  if (symmetry === 0) {
+
+    ctx.beginPath();
+
+    ctx.moveTo(lastX, lastY);
+
+    ctx.lineTo(x, y);
+
+    ctx.stroke();
+
+  } else {
+
+    for (let i = 0; i < symmetry; i++) {
+
+      const angle = (Math.PI * 2 / symmetry) * i;
+
+      const sin = Math.sin(angle);
+
+      const cos = Math.cos(angle);
+
+
+
+      const rx1 = dx1 * cos - dy1 * sin + cx;
+
+      const ry1 = dx1 * sin + dy1 * cos + cy;
+
+      const rx2 = dx2 * cos - dy2 * sin + cx;
+
+      const ry2 = dx2 * sin + dy2 * cos + cy;
+
+
+
+      ctx.beginPath();
+
+      ctx.moveTo(rx1, ry1);
+
+      ctx.lineTo(rx2, ry2);
+
+      ctx.stroke();
+
+    }
+
+  }
+
+
+
+  lastX = x;
+
+  lastY = y;
+
+}
+
+
+
+canvas.addEventListener("mousedown", start);
+
+canvas.addEventListener("mouseup", stop);
+
+canvas.addEventListener("mouseleave", stop);
+
+canvas.addEventListener("mousemove", draw);
+
+
+
+document.getElementById("clearBtn").addEventListener("click", () => {
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+});
+
+
+
+// ⭐ SAVE AS PNG ⭐
+
+document.getElementById("saveBtn").addEventListener("click", () => {
+
+  const link = document.createElement("a");
+
+  link.download = "kaleidoscope.png";
+
+  link.href = canvas.toDataURL("image/png");
+
+  link.click();
+
+});
+
+</script>
+
+
+
+</body>
+
+</html>
+

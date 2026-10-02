@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+
+<title>Dual Snake AI vs Safe Snake</title>
+
+<style>
+
+  body {
+
+    margin: 0;
+
+    background: #ccc;
+
+    display: flex;
+
+    justify-content: center;
+
+    align-items: center;
+
+    height: 100vh;
+
+    font-family: Arial, sans-serif;
+
+  }
+
+  canvas {
+
+    background: #000;
+
+    border: 2px solid #333;
+
+  }
+
+  #instructions {
+
+    position: absolute;
+
+    top: 10px;
+
+    text-align: center;
+
+    width: 100%;
+
+    font-size: 18px;
+
+    color: #222;
+
+    font-weight: bold;
+
+    pointer-events: none;
+
+  }
+
+</style>
+
+</head>
+
+<body>
+
+<div id="instructions">
+
+  LEFT: Greedy AI/Go straight for the food  — RIGHT: Conservative Safe AI/Loves Zigzags.  
+
+  Each food speeds up only the snake that ate it.
+
+</div>
+
+<canvas id="game" width="800" height="400"></canvas>
+
+<script>
+
+const canvas = document.getElementById("game");
+
+const ctx = canvas.getContext("2d");
+
+// GRID
+
+const COLS = 20;
+
+const ROWS = 20;
+
+const CELL = canvas.height / ROWS;
+
+// OFFSETS
+
+const LEFT_OFFSET = 0;
+
+const RIGHT_OFFSET = canvas.width / 2;
+
+// GAME TEMPLATE
+
+function makeGame(offsetX) {
+
+  return {
+
+    snake: [{x: 10, y: 10}],
+
+    dir: {x: 1, y: 0},
+
+    alive: true,
+
+    score: 0,
+
+    offsetX,
+
+    food: null,
+
+    speed: 200,
+
+    timer: null
+
+  };
+
+}
+
+const leftGame = makeGame(LEFT_OFFSET);
+
+const rightGame = makeGame(RIGHT_OFFSET);
+
+// FOOD SPAWN
+
+function spawnFood(game) {
+
+  while (true) {
+
+    const f = {
+
+      x: Math.floor(Math.random() * COLS),
+
+      y: Math.floor(Math.random() * ROWS)
+
+    };
+
+    if (!game.snake.some(s => s.x === f.x && s.y === f.y)) {
+
+      game.food = f;
+
+      return;
+
+    }
+
+  }
+
+}
+
+spawnFood(leftGame);
+
+spawnFood(rightGame);
+
+// SAFE CELL
+
+function isSafe(x, y, snake) {
+
+  if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return false;
+
+  return !snake.some(s => s.x === x && s.y === y);
+
+}
+
+// BFS
+
+function bfs(start, goal, snake) {
+
+  const queue = [start];
+
+  const visited = new Set([start.x + "," + start.y]);
+
+  const parent = {};
+
+  while (queue.length) {
+
+    const cur = queue.shift();
+
+    if (cur.x === goal.x && cur.y === goal.y) break;
+
+    const neighbors = [
+
+      {x: cur.x+1, y: cur.y},
+
+      {x: cur.x-1, y: cur.y},
+
+      {x: cur.x, y: cur.y+1},
+
+      {x: cur.x, y: cur.y-1}
+
+    ];
+
+    for (let n of neighbors) {
+
+      const key = n.x + "," + n.y;
+
+      if (!visited.has(key) && isSafe(n.x, n.y, snake)) {
+
+        visited.add(key);
+
+        parent[key] = cur;
+
+        queue.push(n);
+
+      }
+
+    }
+
+  }
+
+  const key = goal.x + "," + goal.y;
+
+  if (!parent[key]) return null;
+
+  let path = [];
+
+  let cur = goal;
+
+  while (cur.x !== start.x || cur.y !== start.y) {
+
+    path.push(cur);
+
+    cur = parent[cur.x + "," + cur.y];
+
+  }
+
+  path.reverse();
+
+  return path;
+
+}
+
+// COUNT ACCESSIBLE SPACE (for conservative AI)
+
+function floodFillCount(start, snake) {
+
+  const visited = new Set();
+
+  const queue = [start];
+
+  while (queue.length) {
+
+    const cur = queue.shift();
+
+    const key = cur.x + "," + cur.y;
+
+    if (visited.has(key)) continue;
+
+    visited.add(key);
+
+    const neighbors = [
+
+      {x: cur.x+1, y: cur.y},
+
+      {x: cur.x-1, y: cur.y},
+
+      {x: cur.x, y: cur.y+1},
+
+      {x: cur.x, y: cur.y-1}
+
+    ];
+
+    for (let n of neighbors) {
+
+      const k = n.x + "," + n.y;
+
+      if (
+
+        n.x >= 0 && n.x < COLS &&
+
+        n.y >= 0 && n.y < ROWS &&
+
+        !snake.some(s => s.x === n.x && s.y === n.y) &&
+
+        !visited.has(k)
+
+      ) {
+
+        queue.push(n);
+
+      }
+
+    }
+
+  }
+
+  return visited.size;
+
+}
+
+// LEFT AI (aggressive)
+
+function aiMoveSmart(game) {
+
+  const head = game.snake[0];
+
+  const path = bfs(head, game.food, game.snake);
+
+  if (path) {
+
+    const next = path[0];
+
+    game.dir = {x: next.x - head.x, y: next.y - head.y};
+
+    return;
+
+  }
+
+  // fallback
+
+  const moves = [
+
+    {x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}
+
+  ];
+
+  for (let m of moves) {
+
+    const nx = head.x + m.x;
+
+    const ny = head.y + m.y;
+
+    if (isSafe(nx, ny, game.snake)) {
+
+      game.dir = m;
+
+      return;
+
+    }
+
+  }
+
+  game.alive = false;
+
+}
+
+// RIGHT AI (conservative survival)
+
+function aiMoveSafe(game) {
+
+  const head = game.snake[0];
+
+  const moves = [
+
+    {x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}
+
+  ];
+
+  // Evaluate moves by safety score
+
+  let bestMove = null;
+
+  let bestScore = -Infinity;
+
+  for (let m of moves) {
+
+    const nx = head.x + m.x;
+
+    const ny = head.y + m.y;
+
+    if (!isSafe(nx, ny, game.snake)) continue;
+
+    // simulate move
+
+    const simSnake = JSON.parse(JSON.stringify(game.snake));
+
+    simSnake.unshift({x: nx, y: ny});
+
+    simSnake.pop();
+
+    // count accessible space
+
+    const space = floodFillCount({x: nx, y: ny}, simSnake);
+
+    // distance to food (prefer closer only if safe)
+
+    const dist = Math.hypot(nx - game.food.x, ny - game.food.y);
+
+    // scoring: prioritize space, then distance
+
+    const score = space * 10 - dist;
+
+    if (score > bestScore) {
+
+      bestScore = score;
+
+      bestMove = m;
+
+    }
+
+  }
+
+  if (bestMove) {
+
+    game.dir = bestMove;
+
+    return;
+
+  }
+
+  // fallback
+
+  game.alive = false;
+
+}
+
+// UPDATE
+
+function updateGame(game, aiType) {
+
+  if (!game.alive) return;
+
+  if (aiType === "smart") aiMoveSmart(game);
+
+  else aiMoveSafe(game);
+
+  const head = game.snake[0];
+
+  const newHead = {x: head.x + game.dir.x, y: head.y + game.dir.y};
+
+  if (!isSafe(newHead.x, newHead.y, game.snake)) {
+
+    game.alive = false;
+
+    return;
+
+  }
+
+  game.snake.unshift(newHead);
+
+  if (newHead.x === game.food.x && newHead.y === game.food.y) {
+
+    game.score++;
+
+    game.speed = Math.max(40, game.speed - 5);
+
+    restartTimer(game, aiType);
+
+    spawnFood(game);
+
+  } else {
+
+    game.snake.pop();
+
+  }
+
+}
+
+// DRAW SNAKE
+
+function drawSnake(game) {
+
+  const snake = game.snake;
+
+  const tail = snake[snake.length - 1];
+
+  ctx.fillStyle = "#0099cc";
+
+  ctx.fillRect(game.offsetX + tail.x * CELL, tail.y * CELL, CELL, CELL);
+
+  for (let i = 1; i < snake.length - 1; i++) {
+
+    const s = snake[i];
+
+    ctx.fillStyle = "#00ccff";
+
+    ctx.fillRect(game.offsetX + s.x * CELL, s.y * CELL, CELL, CELL);
+
+  }
+
+  const head = snake[0];
+
+  ctx.fillStyle = "#ffffff";
+
+  ctx.fillRect(game.offsetX + head.x * CELL, head.y * CELL, CELL, CELL);
+
+  ctx.fillStyle = "#000";
+
+  const cx = game.offsetX + head.x * CELL;
+
+  const cy = head.y * CELL;
+
+  const eye = CELL * 0.2;
+
+  if (game.dir.x === 1) {
+
+    ctx.fillRect(cx + CELL*0.6, cy + CELL*0.25, eye, eye);
+
+    ctx.fillRect(cx + CELL*0.6, cy + CELL*0.55, eye, eye);
+
+  }
+
+  if (game.dir.x === -1) {
+
+    ctx.fillRect(cx + CELL*0.2, cy + CELL*0.25, eye, eye);
+
+    ctx.fillRect(cx + CELL*0.2, cy + CELL*0.55, eye, eye);
+
+  }
+
+  if (game.dir.y === 1) {
+
+    ctx.fillRect(cx + CELL*0.25, cy + CELL*0.6, eye, eye);
+
+    ctx.fillRect(cx + CELL*0.55, cy + CELL*0.6, eye, eye);
+
+  }
+
+  if (game.dir.y === -1) {
+
+    ctx.fillRect(cx + CELL*0.25, cy + CELL*0.2, eye, eye);
+
+    ctx.fillRect(cx + CELL*0.55, cy + CELL*0.2, eye, eye);
+
+  }
+
+}
+
+// DRAW GAME
+
+function drawGame(game) {
+
+  ctx.fillStyle = "lime";
+
+  ctx.fillRect(game.offsetX + game.food.x * CELL, game.food.y * CELL, CELL, CELL);
+
+  drawSnake(game);
+
+  ctx.fillStyle = "white";
+
+  ctx.font = "16px Arial";
+
+  ctx.fillText("Score: " + game.score, game.offsetX + 10, 20);
+
+  if (!game.alive) {
+
+    ctx.fillStyle = "red";
+
+    ctx.font = "20px Arial";
+
+    ctx.fillText("GAME OVER", game.offsetX + 40, 200);
+
+  }
+
+}
+
+// TIMERS
+
+function restartTimer(game, aiType) {
+
+  if (game.timer) clearInterval(game.timer);
+
+  game.timer = setInterval(() => updateGame(game, aiType), game.speed);
+
+}
+
+restartTimer(leftGame, "smart");
+
+restartTimer(rightGame, "safe");
+
+// MAIN LOOP
+
+function loop() {
+
+  ctx.fillStyle = "#000";
+
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Divider
+
+  ctx.strokeStyle = "#555";
+
+  ctx.lineWidth = 4;
+
+  ctx.beginPath();
+
+  ctx.moveTo(canvas.width / 2, 0);
+
+  ctx.lineTo(canvas.width / 2, canvas.height);
+
+  ctx.stroke();
+
+  drawGame(leftGame);
+
+  drawGame(rightGame);
+
+  requestAnimationFrame(loop);
+
+}
+
+loop();
+
+</script>
+
+</body>
+
+</html>
+

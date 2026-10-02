@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cow Abductor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&family=Space+Grotesk:wght@300;500;700&display=swap');
+
+        :root {
+            --ufo-green: #00ff00;
+            --ufo-glow: rgba(0, 255, 0, 0.4);
+            --deep-space: #050510;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--deep-space);
+            font-family: 'Outfit', sans-serif;
+            color: white;
+            user-select: none;
+            cursor: none; /* Custom UFO cursor handled by JS */
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 15px 25px;
+            border-radius: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .stat-label {
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--ufo-green);
+            opacity: 0.8;
+        }
+
+        .stat-value {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(5, 5, 16, 0.9);
+            backdrop-filter: blur(20px);
+            padding: 60px;
+            border-radius: 30px;
+            border: 1px solid var(--ufo-green);
+            box-shadow: 0 0 50px rgba(0, 255, 0, 0.2);
+            display: none;
+            z-index: 100;
+            max-width: 90%;
+        }
+
+        #message h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 56px;
+            font-weight: 700;
+            color: var(--ufo-green);
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px var(--ufo-glow);
+        }
+
+        #message p {
+            font-size: 20px;
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+
+        #message button {
+            background: var(--ufo-green);
+            color: black;
+            border: none;
+            padding: 18px 45px;
+            font-size: 18px;
+            font-weight: 700;
+            border-radius: 12px;
+            cursor: pointer;
+            pointer-events: auto;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        #message button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px var(--ufo-glow);
+            background: #22ff22;
+        }
+
+        /* Scanline Overlay for retro-futuristic look */
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%,
+                rgba(0, 0, 0, 0.1) 50%
+            ), linear-gradient(
+                90deg,
+                rgba(255, 0, 0, 0.02),
+                rgba(0, 255, 0, 0.01),
+                rgba(0, 0, 255, 0.02)
+            );
+            background-size: 100% 4px, 3px 100%;
+            pointer-events: none;
+            z-index: 50;
+        }
+    </style>
+</head>
+<body>
+    <div class="scanlines"></div>
+    
+    <div id="game-container">
+        <div id="ui">
+            <div class="stat-card">
+                <div>
+                    <div class="stat-label">Abducted</div>
+                    <div class="stat-value" id="score">0</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div>
+                    <div class="stat-label">Time Remaining</div>
+                    <div class="stat-value" id="timer">60</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="message">
+            <h1>MISSION COMPLETE</h1>
+            <p id="msg-score">You successfully collected 0 specimens.</p>
+            <button onclick="resetGame()">Initiate New Mission</button>
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const timerEl = document.getElementById('timer');
+        const messageEl = document.getElementById('message');
+        const msgScoreEl = document.getElementById('msg-score');
+
+        let score = 0;
+        let timeLeft = 60;
+        let gameActive = true;
+        let mouseX = 0;
+        let mouseY = 0;
+        let isBeaming = false;
+        let timerInterval;
+
+        const GROUND_HEIGHT = 120;
+        const SKY_COLOR = '#050510';
+        const GRASS_COLOR = '#0a2e0a';
+        const BEAM_COLOR = 'rgba(0, 255, 0, 0.3)';
+        
+        let cows = [];
+        let particles = [];
+        let stars = [];
+
+        class Cow {
+            constructor() {
+                this.reset();
+                // Random starting position
+                this.x = Math.random() * canvas.width;
+            }
+
+            reset() {
+                this.width = 44;
+                this.height = 30;
+                this.x = Math.random() > 0.5 ? -this.width : canvas.width + this.width;
+                this.y = canvas.height - GROUND_HEIGHT - this.height + 15;
+                this.speed = (Math.random() * 1.5 + 0.5) * (this.x < 0 ? 1 : -1);
+                this.isBeingAbducted = false;
+                this.abductionProgress = 0;
+                this.legOffset = 0;
+                this.color = Math.random() > 0.8 ? '#442211' : '#ffffff'; // Occasional brown cow
+            }
+
+            update() {
+                if (this.isBeingAbducted) {
+                    // Pull towards UFO center
+                    const dx = mouseX - (this.x + this.width / 2);
+                    const dy = mouseY - (this.y + this.height / 2);
+                    
+                    this.x += dx * 0.1;
+                    this.y += dy * 0.1;
+                    
+                    this.abductionProgress += 0.02;
+
+                    // Rotate and shrink as it gets closer
+                    if (Math.abs(dx) < 20 && Math.abs(dy) < 20) {
+                        score++;
+                        scoreEl.innerText = score;
+                        createExplosion(this.x + this.width / 2, this.y + this.height / 2, '#00ff00');
+                        this.reset();
+                    }
+                } else {
+                    this.x += this.speed;
+                    this.legOffset += 0.15;
+                    
+                    // Bounce back or wrap around
+                    if (this.x > canvas.width + 100 || this.x < -100) {
+                        this.reset();
+                    }
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+                
+                if (this.isBeingAbducted) {
+                    ctx.rotate(this.abductionProgress * 10);
+                    const scale = Math.max(0.2, 1 - this.abductionProgress);
+                    ctx.scale(scale, scale);
+                }
+
+                // Body
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.roundRect(-20, -10, 40, 25, 10);
+                ctx.fill();
+
+                // Spots
+                ctx.fillStyle = '#222';
+                ctx.beginPath();
+                ctx.arc(-5, -2, 6, 0, Math.PI * 2);
+                ctx.arc(8, 5, 5, 0, Math.PI * 2);
+                ctx.arc(-10, 8, 4, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Head
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.roundRect(12, -18, 18, 15, 5);
+                ctx.fill();
+
+                // Eyes
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(22, -12, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Legs
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 4;
+                const legMove = Math.sin(this.legOffset) * 5;
+                ctx.beginPath();
+                ctx.moveTo(-12, 10); ctx.lineTo(-12 + (this.isBeingAbducted ? 0 : legMove), 20);
+                ctx.moveTo(12, 10); ctx.lineTo(12 + (this.isBeingAbducted ? 0 : -legMove), 20);
+                ctx.stroke();
+
+                ctx.restore();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.size = Math.random() * 4 + 2;
+                this.vx = (Math.random() - 0.5) * 10;
+                this.vy = (Math.random() - 0.5) * 10;
+                this.life = 1.0;
+                this.decay = Math.random() * 0.05 + 0.02;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= this.decay;
+            }
+
+            draw() {
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 15; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        function createStars() {
+            stars = [];
+            for (let i = 0; i < 150; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 2,
+                    blink: Math.random() * 0.05
+                });
+            }
+        }
+
+        function drawUFO() {
+            // Beam
+            if (isBeaming) {
+                const gradient = ctx.createLinearGradient(0, mouseY, 0, canvas.height);
+                gradient.addColorStop(0, 'rgba(0, 255, 0, 0.6)');
+                gradient.addColorStop(0.8, 'rgba(0, 255, 0, 0.1)');
+                gradient.addColorStop(1, 'rgba(0, 255, 0, 0)');
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.moveTo(mouseX - 20, mouseY);
+                ctx.lineTo(mouseX + 20, mouseY);
+                ctx.lineTo(mouseX + 120, canvas.height);
+                ctx.lineTo(mouseX - 120, canvas.height);
+                ctx.closePath();
+                ctx.fill();
+
+                // Beam lines
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.setLineDash([10, 15]);
+                ctx.lineDashOffset = -Date.now() / 20;
+                ctx.beginPath();
+                ctx.moveTo(mouseX - 10, mouseY);
+                ctx.lineTo(mouseX - 60, canvas.height);
+                ctx.moveTo(mouseX + 10, mouseY);
+                ctx.lineTo(mouseX + 60, canvas.height);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // UFO Body
+            ctx.save();
+            ctx.translate(mouseX, mouseY);
+            
+            // Outer Glow
+            const glow = ctx.createRadialGradient(0, 0, 10, 0, 0, 60);
+            glow.addColorStop(0, 'rgba(0, 255, 100, 0.2)');
+            glow.addColorStop(1, 'rgba(0, 255, 100, 0)');
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(0, 0, 60, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Glass Dome
+            ctx.fillStyle = 'rgba(100, 200, 255, 0.6)';
+            ctx.beginPath();
+            ctx.arc(0, -10, 25, Math.PI, 0);
+            ctx.fill();
+            
+            // Highlights on dome
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.beginPath();
+            ctx.ellipse(-8, -20, 10, 5, Math.PI/4, 0, Math.PI*2);
+            ctx.fill();
+
+            // Main Saucer
+            const saucerGrad = ctx.createLinearGradient(0, -15, 0, 15);
+            saucerGrad.addColorStop(0, '#888');
+            saucerGrad.addColorStop(0.5, '#444');
+            saucerGrad.addColorStop(1, '#222');
+            ctx.fillStyle = saucerGrad;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 60, 20, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Rim
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Pulsing lights
+            const time = Date.now() / 200;
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2 + time;
+                const x = Math.cos(angle) * 45;
+                const y = Math.sin(angle) * 8;
+                const hue = (i * 45 + Date.now() / 10) % 360;
+                ctx.fillStyle = `hsla(${hue}, 100%, 60%, 0.8)`;
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            createStars();
+        }
+
+        function init() {
+            window.addEventListener('resize', resize);
+            window.addEventListener('mousemove', (e) => {
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+            });
+            window.addEventListener('mousedown', () => isBeaming = true);
+            window.addEventListener('mouseup', () => isBeaming = false);
+            
+            // Touch support
+            window.addEventListener('touchstart', (e) => {
+                isBeaming = true;
+                mouseX = e.touches[0].clientX;
+                mouseY = e.touches[0].clientY;
+            });
+            window.addEventListener('touchend', () => isBeaming = false);
+            window.addEventListener('touchmove', (e) => {
+                mouseX = e.touches[0].clientX;
+                mouseY = e.touches[0].clientY;
+            });
+
+            resize();
+            for (let i = 0; i < 8; i++) {
+                cows.push(new Cow());
+            }
+            
+            startTimer();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                if (gameActive) {
+                    timeLeft--;
+                    timerEl.innerText = timeLeft;
+                    if (timeLeft <= 0) {
+                        gameOver();
+                    }
+                }
+            }, 1000);
+        }
+
+        function gameOver() {
+            gameActive = false;
+            clearInterval(timerInterval);
+            messageEl.style.display = 'block';
+            msgScoreEl.innerText = `You successfully abducted ${score} terrestrial specimens.`;
+            document.body.style.cursor = 'default';
+        }
+
+        function resetGame() {
+            score = 0;
+            timeLeft = 60;
+            gameActive = true;
+            scoreEl.innerText = '0';
+            timerEl.innerText = '60';
+            messageEl.style.display = 'none';
+            document.body.style.cursor = 'none';
+            cows.forEach(cow => cow.reset());
+            particles = [];
+            startTimer();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function gameLoop() {
+            if (!gameActive) return;
+
+            // Background
+            ctx.fillStyle = SKY_COLOR;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Stars
+            ctx.fillStyle = 'white';
+            stars.forEach(star => {
+                ctx.globalAlpha = 0.5 + Math.sin(Date.now() * star.blink) * 0.5;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1.0;
+
+            // Ground
+            ctx.fillStyle = GRASS_COLOR;
+            ctx.fillRect(0, canvas.height - GROUND_HEIGHT, canvas.width, GROUND_HEIGHT);
+            
+            // Ground details
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            ctx.lineWidth = 1;
+            for(let i = 0; i < canvas.width; i+= 50) {
+                ctx.beginPath();
+                ctx.moveTo(i, canvas.height - GROUND_HEIGHT);
+                ctx.lineTo(i - 20, canvas.height);
+                ctx.stroke();
+            }
+
+            // Cow Logic
+            cows.forEach(cow => {
+                if (isBeaming && !cow.isBeingAbducted) {
+                    // Simple beam detection: check if cow is in the triangular area
+                    const beamLeft = mouseX - 120;
+                    const beamRight = mouseX + 120;
+                    if (cow.x > beamLeft && cow.x < beamRight && mouseY < cow.y) {
+                        cow.isBeingAbducted = true;
+                    }
+                }
+                cow.update();
+                cow.draw();
+            });
+
+            // Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].life <= 0) particles.splice(i, 1);
+            }
+
+            drawUFO();
+            requestAnimationFrame(gameLoop);
+        }
+
+        init();
+    </script>
+</body>
+</html>

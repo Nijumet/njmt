@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<title>Chatbot Mad Libs</title>
+
+<style>
+
+  body {
+
+    margin: 0;
+
+    background: #f2f2f2;
+
+    font-family: Arial, sans-serif;
+
+    display: flex;
+
+    flex-direction: column;
+
+    height: 100vh;
+
+  }
+
+
+
+  #chat {
+
+    flex: 1;
+
+    padding: 15px;
+
+    overflow-y: auto;
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 12px;
+
+  }
+
+
+
+  .bot, .user {
+
+    max-width: 75%;
+
+    padding: 10px 14px;
+
+    border-radius: 14px;
+
+    line-height: 1.4;
+
+    white-space: pre-wrap;
+
+  }
+
+
+
+  .bot {
+
+    background: #ffffff;
+
+    align-self: flex-start;
+
+    border: 1px solid #ddd;
+
+  }
+
+
+
+  .user {
+
+    background: #d1ffd1;
+
+    align-self: flex-end;
+
+    border: 1px solid #9adf9a;
+
+  }
+
+
+
+  #inputBar {
+
+    display: flex;
+
+    padding: 10px;
+
+    background: #fff;
+
+    border-top: 1px solid #ccc;
+
+  }
+
+
+
+  #inputBar input {
+
+    flex: 1;
+
+    padding: 10px;
+
+    border-radius: 8px;
+
+    border: 1px solid #aaa;
+
+    font-size: 16px;
+
+  }
+
+
+
+  #inputBar button {
+
+    margin-left: 10px;
+
+    padding: 10px 16px;
+
+    border: none;
+
+    border-radius: 8px;
+
+    background: #4CAF50;
+
+    color: white;
+
+    font-size: 16px;
+
+    cursor: pointer;
+
+  }
+
+
+
+  #inputBar button:hover {
+
+    background: #45a049;
+
+  }
+
+</style>
+
+</head>
+
+<body>
+
+
+
+<div id="chat"></div>
+
+
+
+<div id="inputBar">
+
+  <input id="userInput" placeholder="Type here...">
+
+  <button onclick="submitInput()">Send</button>
+
+</div>
+
+
+
+<script>
+
+const chat = document.getElementById("chat");
+
+const input = document.getElementById("userInput");
+
+
+
+// Words needed for the story
+
+const prompts = [
+
+  "Give me a person's name.",
+
+  "Give me an adjective.",
+
+  "Name an animal.",
+
+  "Give me a verb (past tense).",
+
+  "Name a place.",
+
+  "Give me a plural noun.",
+
+  "Name a food.",
+
+  "Give me another adjective.",
+
+  "Name an object.",
+
+  "Give me an emotion."
+
+];
+
+
+
+let answers = [];
+
+let step = 0;
+
+
+
+// Add a message to the chat
+
+function addMessage(text, sender) {
+
+  const div = document.createElement("div");
+
+  div.className = sender;
+
+  div.textContent = text;
+
+  chat.appendChild(div);
+
+  chat.scrollTop = chat.scrollHeight;
+
+}
+
+
+
+// Start the conversation
+
+addMessage("Hi! Let's play Mad Libs. I'll ask you for some words.", "bot");
+
+setTimeout(() => addMessage(prompts[step], "bot"), 600);
+
+
+
+// Handle user input
+
+function submitInput() {
+
+  const text = input.value.trim();
+
+  if (!text) return;
+
+
+
+  addMessage(text, "user");
+
+  answers.push(text);
+
+  input.value = "";
+
+
+
+  step++;
+
+
+
+  if (step < prompts.length) {
+
+    setTimeout(() => addMessage(prompts[step], "bot"), 500);
+
+  } else {
+
+    setTimeout(showStory, 600);
+
+  }
+
+}
+
+
+
+// Build and show the final story
+
+function showStory() {
+
+  const [
+
+    name, adj, animal, verbPast, place,
+
+    plural, food, adj2, object, emotion
+
+  ] = answers;
+
+
+
+  const story =
+
+`${name} woke up feeling unusually ${adj}. It wasn’t the normal kind of ${adj}, either — 
+
+it was the kind that made birds stare, clouds whisper, and the neighbor’s ${animal} 
+
+slowly back away while maintaining eye contact.
+
+
+
+After stretching dramatically for no reason, ${name} decided to visit the ${place}. 
+
+On the way there, a mysterious ${animal} wearing sunglasses suddenly ${verbPast} 
+
+right in the middle of the sidewalk.
+
+
+
+Inside the ${place}, things only got stranger. A group of tourists were loudly 
+
+arguing about the proper way to juggle ${plural}. Someone was selling “artisanal 
+
+handcrafted ${food}” for $87 a slice.
+
+
+
+Feeling ${emotion}, ${name} wandered deeper until discovering a hidden door behind 
+
+a vending machine. Inside was a neon-lit hallway leading to a throne made entirely 
+
+of ${plural}. Sitting on it was the same sunglasses-wearing ${animal}.
+
+
+
+The creature declared:
+
+  “BEHOLD, ${name}! You are now ruler of the ${adj2} Realm of Eternal ${plural}!”
+
+
+
+A crown made of ${food} was placed on ${name}'s head. It was warm. Uncomfortably warm.
+
+
+
+From that day forward, ${name} ruled with wisdom, grace, and a strict 
+
+no-running-near-the-pool policy. Citizens celebrated by dressing as giant ${object}s 
+
+and dancing in the streets.
+
+
+
+It was, without question, the most ${adj} adventure ever.`;
+
+
+
+  addMessage("All done! Here's your story:", "bot");
+
+  setTimeout(() => addMessage(story, "bot"), 500);
+
+}
+
+</script>
+
+
+
+</body>
+
+</html>
+

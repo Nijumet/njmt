@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fluid Dynamics Lab</title>
+<style>
+:root{--bg:#f4f1ea;--fg:#1c2233;--panel:#fff;--line:#d8d3c6;--acc:#e8871e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1020;--fg:#e8e6df;--panel:#171b30;--line:#2b3150}}
+:root[data-theme="dark"]{--bg:#0d1020;--fg:#e8e6df;--panel:#171b30;--line:#2b3150}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:14px}
+h1{font-size:20px;margin:0 0 2px}p{margin:0 0 10px;opacity:.7;font-size:13px}
+canvas{display:block;width:100%;aspect-ratio:2/1;border-radius:10px;border:1px solid var(--line);touch-action:none;cursor:crosshair;background:#0a1a7a}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:10px;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
+.grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+button{font:inherit;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:7px;padding:5px 11px;cursor:pointer}
+button.on{background:var(--acc);border-color:var(--acc);color:#1a1205;font-weight:600}
+label{display:flex;flex-direction:column;font-size:12px;gap:2px;min-width:120px;flex:1}
+input[type=range]{width:100%;accent-color:var(--acc)}
+</style></head><body><main>
+<h1>Fluid Dynamics Lab</h1>
+<p>Two-layer fluid with buoyancy. Drag on the fluid to stir it or inject light/heavy fluid.</p>
+<canvas id="c"></canvas>
+<div class="panel">
+ <div class="grp" id="presets"><button data-p="plume" class="on">Plume</button><button data-p="shear">Shear layer</button><button data-p="pair">Vortex pair</button></div>
+ <div class="grp" id="tools"><button data-t="stir" class="on">Stir</button><button data-t="light">Light fluid</button><button data-t="heavy">Heavy fluid</button></div>
+ <div class="grp" id="res"><button data-w="288">Standard</button><button data-w="480" class="on">HD</button><button data-w="640">Ultra HD</button></div>
+ <div class="grp"><button id="pause">Pause</button><button id="flip">Flip gravity</button><button id="reset">Reset</button></div>
+</div>
+<div class="panel" id="dlg" style="display:none"><div class="grp"><button id="png">Save image</button><button id="rec">Record clip</button><button id="page">Save page (.html)</button></div></div>
+<div class="panel">
+ <label>Buoyancy<input id="B" type="range" min="0" max="0.01" step="0.0005" value="0.003"></label>
+ <label>Vorticity boost<input id="E" type="range" min="0" max="2" step="0.05" value="0.5"></label>
+ <label>Viscosity<input id="V" type="range" min="0" max="0.1" step="0.005" value="0.01"></label>
+ <label>Speed<input id="S" type="range" min="1" max="4" step="1" value="2"></label>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id),cv=$('c'),ctx=cv.getContext('2d');
+let W,H,N,K,img,u32,u,v,T,C,u1,v1,T1,C1,A,Bk,p,dv,wc;
+function alloc(w){W=w;H=w/2;N=W*H;K=W/288;cv.width=W;cv.height=H;img=ctx.createImageData(W,H);u32=new Uint32Array(img.data.buffer);
+ [u,v,T,C,u1,v1,T1,C1,A,Bk,p,dv,wc]=Array.from({length:13},()=>new Float32Array(N));}
+let preset='plume',tool='stir',paused=false,gs=1;
+// colormap
+const stops=[[0,6,26,122],[.15,27,95,214],[.32,108,200,242],[.5,251,231,163],[.68,244,165,43],[.85,164,64,15],[.93,90,28,10],[1,10,22,96]];
+const lut=new Uint32Array(256);
+for(let n=0;n<256;n++){const t=n/255;let a=0;while(a<stops.length-2&&t>stops[a+1][0])a++;
+ const s0=stops[a],s1=stops[a+1],f=(t-s0[0])/(s1[0]-s0[0]);
+ const r=s0[1]+(s1[1]-s0[1])*f|0,g=s0[2]+(s1[2]-s0[2])*f|0,b=s0[3]+(s1[3]-s0[3])*f|0;
+ lut[n]=(255<<24)|(b<<16)|(g<<8)|r;}
+const sm=t=>{t=t<0?0:t>1?1:t;return t*t*(3-2*t)},gau=(x,w)=>Math.exp(-x*x/(2*w*w));
+function init(){
+ [u,v,T,C,p].forEach(a=>a.fill(0));
+ const P=[[2,7],[3,6],[5,3.5],[7,2]].map(([m,a])=>[m,a*K*(.6+.8*Math.random()),Math.random()*6.283]);
+ const yb=preset==='shear'?.5:preset==='pair'?.58:.7;
+ for(let i=0;i<W;i++){let y0=yb*H;for(const[m,a,ph]of P)y0+=(preset==='pair'?.3:1)*a*Math.cos(6.283*m*i/W+ph);
+  for(let j=0;j<H;j++){const d=j-y0,e=d/K,k=j*W+i;
+   let c=.3+.2*sm((d+.4*H)/(.4*H));
+   c+=(.68-c)*gau(e,2.5);c+=(.9-c)*gau(e+11,1.1);
+   if(e>0)c+=(.12-c)*sm(e/5);
+   c+=(.04-c)*gau(e-12,1.4);c+=(.75-c)*gau(e-24,1.2);
+   C[k]=c;T[k]=.5+.5*Math.tanh((preset==='plume'?e:-e)/2.5);
+   if(preset==='shear')u[k]=-.4*K*Math.tanh(e/4);}}
+ if(preset==='pair'){const s2=169*K*K;for(const[cx,G]of[[W/2-22*K,-16*K*K],[W/2+22*K,16*K*K]])for(let j=0;j<H;j++)for(let i=0;i<W;i++){
+  const dx=i-cx,dy=j-.85*H,e=Math.exp(-(dx*dx+dy*dy)/s2);u[j*W+i]+=G*-2*dy/s2*e;v[j*W+i]+=G*2*dx/s2*e;}}
+}
+function semi(dst,src,s){for(let j=0;j<H;j++)for(let i=0;i<W;i++){const k=j*W+i;dst[k]=smp(src,i-s*u[k],j-s*v[k]);}}
+function smp(f,x,y){x%=W;if(x<0)x+=W;y=y<0?0:y>H-1?H-1:y;const i0=x|0,j0=y|0,i1=i0+1===W?0:i0+1,j1=j0+1>=H?H-1:j0+1,fx=x-i0,fy=y-j0,r0=j0*W,r1=j1*W;
+ return(f[r0+i0]*(1-fx)+f[r0+i1]*fx)*(1-fy)+(f[r1+i0]*(1-fx)+f[r1+i1]*fx)*fy;}
+function mc(dst,src){semi(A,src,1);semi(Bk,A,-1);
+ for(let j=0;j<H;j++)for(let i=0;i<W;i++){const k=j*W+i;let x=(i-u[k])%W;if(x<0)x+=W;let y=j-v[k];y=y<0?0:y>H-1?H-1:y;
+  const i0=x|0,j0=y|0,i1=i0+1===W?0:i0+1,j1=j0+1>=H?H-1:j0+1;
+  const a=src[j0*W+i0],b=src[j0*W+i1],c=src[j1*W+i0],d=src[j1*W+i1];
+  const mn=Math.min(a,b,c,d),mx=Math.max(a,b,c,d),r=A[k]+.5*(src[k]-Bk[k]);
+  dst[k]=r<mn?mn:r>mx?mx:r;}}
+const ptr={down:false,x:0,y:0,dx:0,dy:0};
+function mouse(){if(!ptr.down)return;const R=8*K,L=2*K,dx=Math.max(-L,Math.min(L,ptr.dx*.5)),dy=Math.max(-L,Math.min(L,ptr.dy*.5));
+ for(let j=Math.max(0,ptr.y-3*R|0);j<Math.min(H,ptr.y+3*R);j++)for(let ii=ptr.x-3*R|0;ii<ptr.x+3*R;ii++){
+  const i=(ii%W+W)%W,k=j*W+i,d2=(ii-ptr.x)**2+(j-ptr.y)**2,w=Math.exp(-d2/(2*R*R));
+  u[k]+=dx*w;v[k]+=dy*w;
+  if(tool==='light'){T[k]+=(1-T[k])*w*.3;C[k]+=(.66-C[k])*w*.3;}
+  else if(tool==='heavy'){T[k]+=(0-T[k])*w*.3;C[k]+=(.06-C[k])*w*.3;}}
+ ptr.dx=ptr.dy=0;}
+function step(){
+ mc(u1,u);mc(v1,v);mc(T1,T);mc(C1,C);[u,u1]=[u1,u];[v,v1]=[v1,v];[T,T1]=[T1,T];[C,C1]=[C1,C];
+ const B=+$('B').value*gs*K,E=+$('E').value*K,nu=Math.min(.2,+$('V').value*K*K),M=3*K;
+ for(let k=0;k<N;k++)v[k]-=B*(T[k]-.5);
+ if(E>0){for(let j=1;j<H-1;j++)for(let i=0;i<W;i++){const k=j*W+i,l=j*W+(i?i-1:W-1),r=j*W+(i<W-1?i+1:0);
+   wc[k]=.5*(v[r]-v[l]-u[k+W]+u[k-W]);}
+  for(let j=2;j<H-2;j++)for(let i=0;i<W;i++){const k=j*W+i,l=j*W+(i?i-1:W-1),r=j*W+(i<W-1?i+1:0);
+   let nx=.5*(Math.abs(wc[r])-Math.abs(wc[l])),ny=.5*(Math.abs(wc[k+W])-Math.abs(wc[k-W]));
+   const L=Math.hypot(nx,ny)+1e-5;nx/=L;ny/=L;u[k]+=E*ny*wc[k]*.5;v[k]-=E*nx*wc[k]*.5;}}
+ if(nu>0){for(let j=0;j<H;j++)for(let i=0;i<W;i++){const k=j*W+i,l=j*W+(i?i-1:W-1),r=j*W+(i<W-1?i+1:0),up=j?k-W:k,dn=j<H-1?k+W:k;
+   u1[k]=u[k]+nu*(u[l]+u[r]+u[up]+u[dn]-4*u[k]);v1[k]=v[k]+nu*(v[l]+v[r]+v[up]+v[dn]-4*v[k]);}
+  [u,u1]=[u1,u];[v,v1]=[v1,v];}
+ for(let i=0;i<W;i++){v[i]=0;v[(H-1)*W+i]=0;}
+ for(let j=0;j<H;j++)for(let i=0;i<W;i++){const k=j*W+i,l=j*W+(i?i-1:W-1),r=j*W+(i<W-1?i+1:0),up=j?k-W:k,dn=j<H-1?k+W:k;
+  dv[k]=-.5*(u[r]-u[l]+v[dn]-v[up]);}
+ for(let it=0,IT=Math.round(40*Math.sqrt(K));it<IT;it++)for(let j=0;j<H;j++)for(let i=0;i<W;i++){const k=j*W+i,l=j*W+(i?i-1:W-1),r=j*W+(i<W-1?i+1:0),up=j?k-W:k,dn=j<H-1?k+W:k;
+  p[k]=(dv[k]+p[l]+p[r]+p[up]+p[dn])*.25;}
+ for(let j=0;j<H;j++)for(let i=0;i<W;i++){const k=j*W+i,l=j*W+(i?i-1:W-1),r=j*W+(i<W-1?i+1:0),up=j?k-W:k,dn=j<H-1?k+W:k;
+  u[k]-=.5*(p[r]-p[l]);v[k]-=.5*(p[dn]-p[up]);
+  u[k]=u[k]>M?M:u[k]<-M?-M:u[k];v[k]=v[k]>M?M:v[k]<-M?-M:v[k];}
+ for(let i=0;i<W;i++){v[i]=0;v[(H-1)*W+i]=0;}
+}
+function frame(){
+ if(!paused){mouse();const s=+$('S').value;for(let n=0;n<s;n++)step();}
+ for(let k=0;k<N;k++){const c=C[k];u32[k]=lut[c<=0?0:c>=1?255:c*255|0];}
+ ctx.putImageData(img,0,0);if(rec)octx.drawImage(cv,0,0,1280,640);requestAnimationFrame(frame);}
+function pos(e){const r=cv.getBoundingClientRect();return[(e.clientX-r.left)/r.width*W,(e.clientY-r.top)/r.height*H];}
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);[ptr.x,ptr.y]=pos(e);ptr.down=true;ptr.dx=ptr.dy=0;});
+cv.addEventListener('pointermove',e=>{const[x,y]=pos(e);if(ptr.down){ptr.dx+=x-ptr.x;ptr.dy+=y-ptr.y;}ptr.x=x;ptr.y=y;});
+['pointerup','pointercancel'].forEach(t=>cv.addEventListener(t,()=>ptr.down=false));
+function group(id,attr,cb){$(id).addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+ $(id).querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));cb(b.dataset[attr]);});}
+group('presets','p',x=>{preset=x;gs=1;init();});
+group('tools','t',x=>tool=x);
+$('reset').onclick=init;$('flip').onclick=()=>gs=-gs;
+$('pause').onclick=e=>{paused=!paused;e.target.textContent=paused?'Play':'Pause';};
+group('res','w',x=>{alloc(+x);init();});
+let dl=null,rec=null,oc,octx,chunks;
+(window.claude&&window.claude.use?window.claude.use('downloads'):Promise.resolve(null)).then(d=>{dl=d;if(d){$('dlg').style.display='';if(!window.MediaRecorder)$('rec').style.display='none';}}).catch(()=>{});
+const save=async(f,d)=>{try{await dl.save({filename:f,data:d});}catch(e){}};
+$('png').onclick=async()=>{const o=document.createElement('canvas');o.width=W*2;o.height=H*2;const x=o.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(cv,0,0,o.width,o.height);
+ save('fluid.png',await new Promise(r=>o.toBlob(r,'image/png')));};
+$('page').onclick=()=>save('fluid-simulation.html','<!DOCTYPE html>\n'+document.documentElement.outerHTML);
+$('rec').onclick=()=>{const b=$('rec');if(rec){rec.stop();return;}
+ oc=document.createElement('canvas');oc.width=1280;oc.height=640;octx=oc.getContext('2d');chunks=[];
+ const st=oc.captureStream(30);let r;try{r=new MediaRecorder(st,{mimeType:'video/webm',videoBitsPerSecond:8e6});}catch(e){r=new MediaRecorder(st);}
+ r.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+ r.onstop=()=>{rec=null;b.textContent='Record clip';save('fluid.webm',new Blob(chunks,{type:'video/webm'}));};
+ rec=r;r.start();b.textContent='Stop & save';};
+alloc(480);init();frame();
+</script></body></html>

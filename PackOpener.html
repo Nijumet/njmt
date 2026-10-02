@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kawaii Blind Box Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=Nunito:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Nunito', 'sans-serif'],
+                        display: ['Outfit', 'sans-serif'],
+                    },
+                    colors: {
+                        kawaii: {
+                            pink: '#fff0f5',
+                            hotpink: '#ff6eb4',
+                            header: '#ffb6c1',
+                            dark: '#222222',
+                            common: '#94a3b8',
+                            uncommon: '#4ade80',
+                            rare: '#60a5fa',
+                            mythic: '#fbbf24',
+                        }
+                    },
+                    animation: {
+                        'float': 'float 3s ease-in-out infinite',
+                        'shake': 'shake 0.5s ease-in-out infinite',
+                        'pop-in': 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
+                        'rotate-slow': 'rotate 15s linear infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-20px)' },
+                        },
+                        shake: {
+                            '0%, 100%': { transform: 'rotate(0deg)' },
+                            '25%': { transform: 'rotate(-5deg)' },
+                            '75%': { transform: 'rotate(5deg)' },
+                        },
+                        rotate: {
+                            'from': { transform: 'rotate(0deg)' },
+                            'to': { transform: 'rotate(360deg)' },
+                        },
+                        popIn: {
+                            '0%': { transform: 'scale(0)', opacity: '0' },
+                            '100%': { transform: 'scale(1)', opacity: '1' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            overflow: hidden;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+
+        .screen {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        .screen.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        .rays {
+            position: absolute;
+            width: 800px;
+            height: 800px;
+            background: repeating-conic-gradient(
+                from 0deg,
+                rgba(255, 255, 255, 0.2) 0deg 15deg,
+                transparent 15deg 30deg
+            );
+            z-index: 0;
+        }
+
+        .btn-shadow {
+            box-shadow: 0 6px 0 rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-shadow:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 rgba(0, 0, 0, 0.1);
+        }
+
+        .rarity-Common { background: linear-gradient(135deg, #e2e8f0, #94a3b8); }
+        .rarity-Uncommon { background: linear-gradient(135deg, #bbf7d0, #4ade80); }
+        .rarity-Rare { background: linear-gradient(135deg, #bfdbfe, #60a5fa); }
+        .rarity-Mythic { background: linear-gradient(135deg, #fef08a, #fbbf24); }
+
+        ::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center h-screen font-sans">
+
+    <div id="app" class="relative w-full max-w-[450px] h-full sm:h-[90vh] sm:rounded-[40px] shadow-2xl overflow-hidden bg-kawaii-pink flex flex-col">
+        
+        <!-- Global Header -->
+        <header class="absolute top-0 left-0 w-full z-20 bg-kawaii-header py-6 px-4 text-center shadow-lg border-b-4 border-pink-200">
+            <h1 id="header-title" class="font-display font-black text-white text-2xl uppercase tracking-wider drop-shadow-[0_2px_0_rgba(216,27,96,1)]">
+                Blind Box Shop
+            </h1>
+        </header>
+
+        <!-- Home Screen -->
+        <div id="home-screen" class="screen active flex-col items-center justify-center p-8 h-full pt-24">
+            <div class="box-container w-64 h-64 mb-12 animate-float drop-shadow-2xl">
+                <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="40" y="60" width="120" height="100" rx="10" fill="#ff6eb4" />
+                    <rect x="40" y="60" width="120" height="30" rx="10" fill="#ffb6c1" />
+                    <path d="M100 40 L120 60 L80 60 Z" fill="#ff6eb4" />
+                    <circle cx="100" cy="110" r="25" fill="white" opacity="0.3" />
+                    <text x="100" y="115" font-family="Arial" font-size="24" font-weight="bold" fill="white" text-anchor="middle">?</text>
+                    <rect x="70" y="145" width="60" height="8" rx="4" fill="white" opacity="0.4" />
+                </svg>
+            </div>
+            
+            <div class="flex flex-col gap-4 w-full max-w-xs">
+                <button onclick="startOpenBox()" class="btn-shadow bg-kawaii-hotpink text-white font-black py-5 px-8 rounded-full text-xl uppercase tracking-widest transition-all">
+                    Open Box
+                </button>
+                <button onclick="showCollection()" class="btn-shadow bg-white text-kawaii-hotpink border-4 border-kawaii-hotpink font-black py-4 px-8 rounded-full text-lg uppercase tracking-widest transition-all">
+                    Collection
+                </button>
+            </div>
+        </div>
+
+        <!-- Box Screen (Opening) -->
+        <div id="box-screen" class="screen flex-col items-center justify-center h-full pt-24">
+            <div class="animate-shake w-64 h-64">
+                <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="40" y="60" width="120" height="100" rx="10" fill="#ff6eb4" />
+                    <rect x="40" y="60" width="120" height="30" rx="10" fill="#ffb6c1" />
+                    <path d="M100 40 L120 60 L80 60 Z" fill="#ff6eb4" />
+                    <text x="100" y="115" font-family="Arial" font-size="24" font-weight="bold" fill="white" text-anchor="middle">...</text>
+                </svg>
+            </div>
+            <p class="mt-8 font-black text-kawaii-hotpink text-2xl animate-pulse uppercase tracking-widest">Opening...</p>
+        </div>
+
+        <!-- Reveal Screen -->
+        <div id="reveal-screen" class="screen flex-col items-center justify-center h-full relative overflow-hidden">
+            <div class="rays animate-rotate-slow"></div>
+            
+            <div class="reveal-content relative z-10 flex flex-col items-center p-6 w-full animate-pop-in">
+                <div id="new-badge" class="hidden absolute top-0 -right-4 bg-yellow-400 text-kawaii-dark font-black px-4 py-1 rounded-full shadow-lg rotate-12 text-sm z-20">NEW!</div>
+                
+                <div id="char-display" class="w-64 h-64 mb-6 drop-shadow-[0_20px_35px_rgba(0,0,0,0.3)]">
+                    <!-- Character SVG injected here -->
+                </div>
+
+                <div class="text-center bg-white/90 p-6 rounded-3xl shadow-xl w-full max-w-xs border-b-4 border-gray-200">
+                    <h2 id="char-name" class="font-display font-black text-3xl text-kawaii-dark mb-1">Character</h2>
+                    <p id="char-rarity" class="font-bold text-kawaii-hotpink uppercase tracking-widest text-sm mb-4">Common</p>
+                    <button onclick="nav('home-screen', 'Blind Box Shop')" class="btn-shadow bg-kawaii-hotpink text-white font-black py-4 px-8 rounded-full text-lg w-full transition-all">
+                        Collect
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Collection Screen -->
+        <div id="collection-screen" class="screen flex-col h-full pt-24 pb-8 px-6">
+            <div class="w-full bg-white rounded-3xl p-5 shadow-inner mb-6 border-b-4 border-gray-100">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="font-black text-kawaii-hotpink uppercase text-sm tracking-tighter">Collection Progress</span>
+                    <span id="progress-text" class="font-black text-kawaii-dark">0 / 25</span>
+                </div>
+                <div class="w-full h-4 bg-gray-100 rounded-full overflow-hidden">
+                    <div id="progress-fill" class="h-full bg-kawaii-hotpink transition-all duration-1000" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="collection-grid" class="grid grid-cols-4 gap-3 overflow-y-auto pr-1 pb-20">
+                <!-- Grid items injected here -->
+            </div>
+
+            <div class="absolute bottom-6 left-0 w-full px-8 flex justify-center z-20">
+                <button onclick="nav('home-screen', 'Blind Box Shop')" class="btn-shadow bg-kawaii-dark text-white font-black py-4 px-12 rounded-full text-lg transition-all w-full max-w-xs">
+                    Back
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const DB = [
+            // COMMON (10)
+            { id: 'cat', n: 'Mochi Cat', r: 'Common', c: '#ffffff', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<path d="M65,60 L85,45 L85,65 Z" fill="#ffffff" /><path d="M135,60 L115,45 L115,65 Z" fill="#ffffff" />', we: false },
+            { id: 'dog', n: 'Pudding Pup', r: 'Common', c: '#f5d76e', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<circle cx="55" cy="80" r="15" fill="#8d6e63" /><circle cx="145" cy="80" r="15" fill="#8d6e63" />', we: false },
+            { id: 'bear', n: 'Honey Bear', r: 'Common', c: '#8d6e63', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<circle cx="65" cy="55" r="12" fill="#8d6e63" /><circle cx="135" cy="55" r="12" fill="#8d6e63" />', we: false },
+            { id: 'frog', n: 'Rainy Froggy', r: 'Common', c: '#81c784', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M75,170 Q75,185 85,185 M125,170 Q125,185 115,185', f: '<circle cx="70" cy="50" r="15" fill="#81c784" /><circle cx="130" cy="50" r="15" fill="#81c784" />', we: true },
+            { id: 'pig', n: 'Peach Piggy', r: 'Common', c: '#f48fb1', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<ellipse cx="100" cy="115" rx="15" ry="10" fill="#f06292" />', we: false },
+            { id: 'chick', n: 'Yuzu Chick', r: 'Common', c: '#fff176', b: 'M60,80 Q60,50 100,50 Q140,50 140,80 L140,150 Q140,170 120,170 L80,170 Q60,170 60,150 Z', l: 'M85,170 L85,185 M115,170 L115,185', f: '<path d="M100,105 L110,115 L90,115 Z" fill="#ffb74d" />', we: false },
+            { id: 'bunny', n: 'Cloud Bun', r: 'Common', c: '#eeeeee', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<rect x="65" y="10" width="15" height="40" rx="7.5" fill="#eeeeee" /><rect x="120" y="10" width="15" height="40" rx="7.5" fill="#eeeeee" />', we: false },
+            { id: 'panda', n: 'Boba Panda', r: 'Common', c: '#ffffff', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<circle cx="65" cy="55" r="12" fill="#333" /><circle cx="135" cy="55" r="12" fill="#333" /><circle cx="80" cy="100" r="10" fill="#333" /><circle cx="120" cy="100" r="10" fill="#333" />', we: true },
+            { id: 'fox', n: 'Fuyu Fox', r: 'Common', c: '#ff8a65', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<path d="M50,70 L70,40 L90,70 Z" fill="#ff8a65" /><path d="M150,70 L130,40 L110,70 Z" fill="#ff8a65" />', we: false },
+            { id: 'owl', n: 'Hooty', r: 'Common', c: '#a1887f', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M85,170 L80,185 M115,170 L120,185', f: '<circle cx="80" cy="95" r="18" fill="white" /><circle cx="120" cy="95" r="18" fill="white" />', we: false },
+
+            // UNCOMMON (8)
+            { id: 'koala', n: 'Eucalyptus', r: 'Uncommon', c: '#b0bec5', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<circle cx="50" cy="70" r="20" fill="#b0bec5" /><circle cx="150" cy="70" r="20" fill="#b0bec5" />', we: false },
+            { id: 'axolotl', n: 'Pink Axo', r: 'Uncommon', c: '#f8bbd0', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<path d="M40,70 L20,60 M40,90 L20,90 M40,110 L20,120" stroke="#f06292" stroke-width="5" /><path d="M160,70 L180,60 M160,90 L180,90 M160,110 L180,120" stroke="#f06292" stroke-width="5" />', we: false },
+            { id: 'penguin', n: 'Ice Pingu', r: 'Uncommon', c: '#4fc3f7', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M80,170 L75,185 M120,170 L125,185', f: '<path d="M100,40 Q50,40 50,100 L50,150 Q100,170 150,150 L150,100 Q150,40 100,40" fill="white" transform="scale(0.8) translate(25,30)" />', we: false },
+            { id: 'raccoon', n: 'Trash Bandit', r: 'Uncommon', c: '#78909c', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<rect x="50" y="85" width="100" height="30" rx="15" fill="#455a64" />', we: true },
+            { id: 'deer', n: 'Forest Fawn', r: 'Uncommon', c: '#a1887f', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<path d="M70,40 L60,10 M130,40 L140,10" stroke="#5d4037" stroke-width="4" />', we: false },
+            { id: 'sloth', n: 'Slow Mo', r: 'Uncommon', c: '#d7ccc8', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<ellipse cx="80" cy="100" rx="15" ry="25" fill="#a1887f" transform="rotate(-20, 80, 100)" /><ellipse cx="120" cy="100" rx="15" ry="25" fill="#a1887f" transform="rotate(20, 120, 100)" />', we: false },
+            { id: 'seal', n: 'Spotted Seal', r: 'Uncommon', c: '#e0e0e0', b: 'M50,80 Q50,40 100,40 Q150,40 150,80 L160,160 Q100,180 40,160 Z', l: 'M40,160 Q30,180 50,180 M160,160 Q170,180 150,180', f: '<circle cx="80" cy="80" r="3" fill="#9e9e9e" /><circle cx="120" cy="90" r="3" fill="#9e9e9e" /><circle cx="95" cy="130" r="3" fill="#9e9e9e" />', we: false },
+            { id: 'bat', n: 'Night Flap', r: 'Uncommon', c: '#546e7a', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<path d="M50,100 L10,80 L10,120 Z" fill="#546e7a" /><path d="M150,100 L190,80 L190,120 Z" fill="#546e7a" />', we: true },
+
+            // RARE (6)
+            { id: 'dragon', n: 'Tiny Drake', r: 'Rare', c: '#80cbc4', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<path d="M100,30 L110,45 L90,45 Z" fill="#4db6ac" /><path d="M80,35 L90,50 L70,50 Z" fill="#4db6ac" /><path d="M120,35 L130,50 L110,50 Z" fill="#4db6ac" />', we: true },
+            { id: 'unicorn', n: 'Star Horn', r: 'Rare', c: '#f3e5f5', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<path d="M100,10 L110,45 L90,45 Z" fill="#ce93d8" />', we: false },
+            { id: 'shiba', n: 'Royal Shiba', r: 'Rare', c: '#ffa726', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<rect x="85" y="45" width="30" height="15" rx="5" fill="#fdd835" />', we: false },
+            { id: 'narwhal', n: 'Sea Pointy', r: 'Rare', c: '#bbdefb', b: 'M50,80 Q50,40 100,40 Q150,40 150,80 L160,160 Q100,180 40,160 Z', l: 'M100,10 L105,50 L95,50 Z', f: '<circle cx="100" cy="120" r="40" fill="white" opacity="0.3" />', we: false },
+            { id: 'dino', n: 'Rawr-some', r: 'Rare', c: '#c5e1a5', b: 'M50,70 Q50,40 100,40 Q150,40 150,70 L150,150 Q150,170 130,170 L70,170 Q50,170 50,150 Z', l: 'M70,170 L70,185 M130,170 L130,185', f: '<path d="M150,80 L180,100 L150,120 Z" fill="#c5e1a5" />', we: true },
+            { id: 'ghost', n: 'Spooky Boo', r: 'Rare', c: '#ffffff', b: 'M60,60 Q100,20 140,60 L140,160 Q120,180 100,160 Q80,180 60,160 Z', l: '', f: '<circle cx="85" cy="80" r="8" fill="black" /><circle cx="115" cy="80" r="8" fill="black" /><ellipse cx="100" cy="110" rx="10" ry="15" fill="black" />', we: true },
+
+            // MYTHIC (1)
+            { id: 'armadillo', n: 'Golden Armadillo', r: 'Mythic', c: '#fbc02d', b: 'M50,80 Q100,20 150,80 L150,150 Q100,170 50,150 Z', l: 'M70,150 L70,170 M130,150 L130,170', f: '<path d="M50,80 Q100,40 150,80" fill="none" stroke="#f9a825" stroke-width="8" /><path d="M50,100 Q100,60 150,100" fill="none" stroke="#f9a825" stroke-width="8" /><path d="M50,120 Q100,80 150,120" fill="none" stroke="#f9a825" stroke-width="8" />', we: true }
+        ];
+
+        let collection = JSON.parse(localStorage.getItem('blind_box_collection')) || {};
+
+        function saveCollection() {
+            localStorage.setItem('blind_box_collection', JSON.stringify(collection));
+        }
+
+        function renderChar(c, isSil = false) {
+            const fill = isSil ? '#cbd5e1' : c.c;
+            const eyeColor = isSil ? '#94a3b8' : (c.we ? 'white' : '#333333');
+            
+            let svg = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" class="w-full h-full">`;
+            
+            // Shadows and Body
+            if (!isSil) {
+                svg += `<ellipse cx="100" cy="180" rx="60" ry="15" fill="black" opacity="0.1" />`;
+            }
+            
+            // Specific parts
+            svg += `<g fill="${fill}" stroke="${isSil ? 'none' : 'rgba(0,0,0,0.05)'}" stroke-width="2">`;
+            svg += c.f || ''; // Feature extras (ears, etc)
+            svg += `<path d="${c.b}" />`; // Body
+            svg += `<path d="${c.l}" stroke="${isSil ? 'none' : 'rgba(0,0,0,0.1)'}" stroke-width="5" fill="none" />`; // Legs
+            svg += `</g>`;
+
+            // Face
+            if (c.id !== 'ghost') {
+                svg += `<g fill="${eyeColor}">
+                    <circle cx="85" cy="100" r="6" />
+                    <circle cx="115" cy="100" r="6" />
+                </g>`;
+                if (!isSil) {
+                    svg += `<path d="M95,115 Q100,120 105,115" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" />`;
+                    svg += `<circle cx="75" cy="110" r="5" fill="#ffb6c1" opacity="0.6" />`;
+                    svg += `<circle cx="125" cy="110" r="5" fill="#ffb6c1" opacity="0.6" />`;
+                }
+            } else if (!isSil) {
+                svg += c.f; // Ghost has special face
+            } else {
+                 svg += `<g fill="${eyeColor}">
+                    <circle cx="85" cy="100" r="6" />
+                    <circle cx="115" cy="100" r="6" />
+                </g>`;
+            }
+
+            svg += `</svg>`;
+            return svg;
+        }
+
+        function nav(screenId, title) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            document.getElementById('header-title').innerText = title;
+        }
+
+        function startOpenBox() {
+            nav('box-screen', 'Opening...');
+            setTimeout(() => revealChar(), 1500);
+        }
+
+        function revealChar() {
+            const rng = Math.random() * 100;
+            let rarity = 'Common';
+            
+            if (rng > 99.95) rarity = 'Mythic';
+            else if (rng > 92) rarity = 'Rare';
+            else if (rng > 60) rarity = 'Uncommon';
+
+            const pool = DB.filter(c => c.r === rarity);
+            const char = pool[Math.floor(Math.random() * pool.length)];
+
+            const isNew = !collection[char.id];
+            collection[char.id] = (collection[char.id] || 0) + 1;
+            saveCollection();
+
+            // Setup reveal screen
+            const screen = document.getElementById('reveal-screen');
+            screen.className = `screen active flex-col items-center justify-center h-full relative overflow-hidden rarity-${rarity}`;
+            
+            document.getElementById('char-display').innerHTML = renderChar(char);
+            document.getElementById('char-name').innerText = char.n;
+            document.getElementById('char-rarity').innerText = char.r;
+            
+            const badge = document.getElementById('new-badge');
+            if (isNew) badge.classList.remove('hidden');
+            else badge.classList.add('hidden');
+
+            nav('reveal-screen', 'You Got!');
+        }
+
+        function showCollection() {
+            const grid = document.getElementById('collection-grid');
+            grid.innerHTML = '';
+            
+            let unlocked = 0;
+            DB.forEach(char => {
+                const count = collection[char.id] || 0;
+                if (count > 0) unlocked++;
+                
+                const cell = document.createElement('div');
+                cell.className = `relative aspect-square rounded-2xl flex items-center justify-center p-2 shadow-sm ${count > 0 ? 'bg-white' : 'bg-slate-200'}`;
+                
+                cell.innerHTML = renderChar(char, count === 0);
+                
+                if (count > 1) {
+                    const badge = document.createElement('div');
+                    badge.className = "absolute -top-1 -right-1 bg-kawaii-hotpink text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-white";
+                    badge.innerText = count;
+                    cell.appendChild(badge);
+                }
+                
+                grid.appendChild(cell);
+            });
+
+            const progress = Math.round((unlocked / DB.length) * 100);
+            document.getElementById('progress-text').innerText = `${unlocked} / ${DB.length}`;
+            document.getElementById('progress-fill').style.width = `${progress}%`;
+
+            nav('collection-screen', 'Collection');
+        }
+
+        // Initialize
+        window.onload = () => {
+            // Optional: Pre-warm animations or sound logic here
+        };
+    </script>
+</body>
+</html>

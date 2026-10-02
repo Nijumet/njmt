@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shadow Tag | Neon Arena</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700;900&family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#050509',
+                        cyan: '#00ffff',
+                        magenta: '#ff00ff',
+                        glass: 'rgba(255, 255, 255, 0.05)',
+                    },
+                    fontFamily: {
+                        display: ['Outfit', 'sans-serif'],
+                        body: ['Space Grotesk', 'sans-serif'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --bg-color: #050509;
+            --cyan: #00ffff;
+            --magenta: #ff00ff;
+            --white: #ffffff;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--white);
+            font-family: 'Space Grotesk', sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: radial-gradient(circle at center, #0a0a1f 0%, #050509 100%);
+        }
+
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            border: 2px solid rgba(0, 255, 255, 0.3);
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.1), inset 0 0 30px rgba(255, 0, 255, 0.1);
+            background: rgba(10, 10, 26, 0.5);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            border-radius: 10px;
+        }
+
+        .overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(5, 5, 9, 0.9);
+            backdrop-filter: blur(10px);
+            z-index: 50;
+            transition: all 0.5s ease;
+        }
+
+        .neon-text-cyan {
+            text-shadow: 0 0 10px var(--cyan), 0 0 20px var(--cyan);
+            color: var(--cyan);
+        }
+
+        .neon-text-magenta {
+            text-shadow: 0 0 10px var(--magenta), 0 0 20px var(--magenta);
+            color: var(--magenta);
+        }
+
+        .neon-border-button {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 1rem 1.5rem;
+            color: white;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+
+        .neon-border-button:hover {
+            border-color: var(--cyan);
+            box-shadow: 0 0 15px var(--cyan);
+            background: rgba(0, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none;
+            z-index: 40;
+        }
+
+        .hud-score-box {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px 20px;
+            border-radius: 8px;
+            border-left: 4px solid var(--cyan);
+            min-width: 140px;
+        }
+
+        .hud-score-box.p2 {
+            border-left: none;
+            border-right: 4px solid var(--magenta);
+            text-align: right;
+        }
+
+        #status-msg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Outfit', sans-serif;
+            font-weight: 900;
+            font-size: 3rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 30;
+            text-align: center;
+        }
+
+        .hidden {
+            display: none !important;
+            opacity: 0;
+        }
+
+        .controls-hint {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- HUD -->
+        <div id="hud" class="hidden">
+            <div class="hud-score-box">
+                <div class="text-xs uppercase opacity-60">Light Survival</div>
+                <div id="p1-score" class="text-2xl font-bold neon-text-cyan">0.0s</div>
+                <div class="controls-hint">WASD</div>
+            </div>
+
+            <div class="flex flex-col items-center">
+                <div class="text-xs uppercase opacity-60">Match Time</div>
+                <div id="timer-display" class="text-4xl font-black font-display tracking-tighter">00</div>
+            </div>
+
+            <div class="hud-score-box p2">
+                <div class="text-xs uppercase opacity-60">Shadow Survival</div>
+                <div id="p2-score" class="text-2xl font-bold neon-text-magenta">0.0s</div>
+                <div class="controls-hint">ARROW KEYS</div>
+            </div>
+        </div>
+
+        <div id="status-msg">STUNNED!</div>
+
+        <!-- Menu Screen -->
+        <div id="menu-screen" class="overlay">
+            <h1 class="text-7xl font-black font-display tracking-tighter mb-2 italic">
+                SHADOW <span class="neon-text-cyan">TAG</span>
+            </h1>
+            <p class="text-sm opacity-60 mb-10 tracking-[0.3em] uppercase">Select Match Duration</p>
+            
+            <div class="grid grid-cols-3 gap-4 mb-8">
+                <button onclick="startGame(10)" class="neon-border-button">10s</button>
+                <button onclick="startGame(20)" class="neon-border-button">20s</button>
+                <button onclick="startGame(30)" class="neon-border-button">30s</button>
+                <button onclick="startGame(40)" class="neon-border-button">40s</button>
+                <button onclick="startGame(50)" class="neon-border-button">50s</button>
+                <button onclick="startGame(60)" class="neon-border-button">60s</button>
+            </div>
+            
+            <div class="text-[10px] opacity-40 max-w-xs text-center leading-relaxed">
+                PLAYER 1: WASD | PLAYER 2: ARROWS<br>
+                TAG YOUR OPPONENT TO MAKE THEM "IT".<br>
+                ONLY THE PLAYER WHO IS NOT "IT" SCORES.
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameover-screen" class="overlay hidden">
+            <h2 class="text-sm opacity-60 mb-2 tracking-[0.3em] uppercase">Match Complete</h2>
+            <h1 id="winner-text" class="text-6xl font-black font-display tracking-tighter mb-10 italic">PLAYER 1 WINS!</h1>
+            <button onclick="resetToMenu()" class="neon-border-button px-12">Return to Menu</button>
+        </div>
+
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const hud = document.getElementById('hud');
+        const menuScreen = document.getElementById('menu-screen');
+        const gameoverScreen = document.getElementById('gameover-screen');
+        const timerDisplay = document.getElementById('timer-display');
+        const p1ScoreDisplay = document.getElementById('p1-score');
+        const p2ScoreDisplay = document.getElementById('p2-score');
+        const statusMsg = document.getElementById('status-msg');
+        const winnerText = document.getElementById('winner-text');
+
+        // Game Constants
+        const PLAYER_RADIUS = 18;
+        const ACCELERATION = 0.8;
+        const FRICTION = 0.92;
+        const STUN_DURATION = 0.8; // seconds
+        const MAX_SPEED = 7.5;
+        const BOUNDARY_BOUNCE = 0.6;
+
+        // Game State
+        let gameState = 'MENU';
+        let matchDuration = 0;
+        let matchTimer = 0;
+        let lastTime = 0;
+        let itPlayer = null;
+        let shockwaves = [];
+        let keys = {};
+
+        // Inputs
+        window.addEventListener('keydown', (e) => keys[e.code] = true);
+        window.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        class Player {
+            constructor(id, x, y, color, controls) {
+                this.id = id;
+                this.startX = x;
+                this.startY = y;
+                this.x = x;
+                this.y = y;
+                this.vx = 0;
+                this.vy = 0;
+                this.color = color;
+                this.controls = controls; // {up, down, left, right}
+                this.survivalTime = 0;
+                this.stunTimer = 0;
+                this.isIt = false;
+                this.flashTime = 0;
+            }
+
+            reset() {
+                this.x = this.startX;
+                this.y = this.startY;
+                this.vx = 0;
+                this.vy = 0;
+                this.survivalTime = 0;
+                this.stunTimer = 0;
+                this.isIt = false;
+                this.flashTime = 0;
+            }
+
+            update(dt) {
+                if (this.stunTimer > 0) {
+                    this.stunTimer -= dt;
+                    this.vx = 0;
+                    this.vy = 0;
+                    return;
+                }
+
+                // Handle Input
+                if (keys[this.controls.up]) this.vy -= ACCELERATION;
+                if (keys[this.controls.down]) this.vy += ACCELERATION;
+                if (keys[this.controls.left]) this.vx -= ACCELERATION;
+                if (keys[this.controls.right]) this.vx += ACCELERATION;
+
+                // Friction
+                this.vx *= FRICTION;
+                this.vy *= FRICTION;
+
+                // Speed Clamp
+                const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                if (speed > MAX_SPEED) {
+                    const ratio = MAX_SPEED / speed;
+                    this.vx *= ratio;
+                    this.vy *= ratio;
+                }
+
+                // Move
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Bounds
+                if (this.x < PLAYER_RADIUS) {
+                    this.x = PLAYER_RADIUS;
+                    this.vx *= -BOUNDARY_BOUNCE;
+                } else if (this.x > canvas.width - PLAYER_RADIUS) {
+                    this.x = canvas.width - PLAYER_RADIUS;
+                    this.vx *= -BOUNDARY_BOUNCE;
+                }
+
+                if (this.y < PLAYER_RADIUS) {
+                    this.y = PLAYER_RADIUS;
+                    this.vy *= -BOUNDARY_BOUNCE;
+                } else if (this.y > canvas.height - PLAYER_RADIUS) {
+                    this.y = canvas.height - PLAYER_RADIUS;
+                    this.vy *= -BOUNDARY_BOUNCE;
+                }
+
+                // Score
+                if (gameState === 'PLAYING' && !this.isIt) {
+                    this.survivalTime += dt;
+                }
+
+                if (this.flashTime > 0) this.flashTime -= dt;
+            }
+
+            draw() {
+                ctx.save();
+                
+                // Glow
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                
+                if (this.stunTimer > 0 || this.flashTime > 0) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.shadowColor = '#ffffff';
+                } else {
+                    ctx.fillStyle = this.color;
+                }
+
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, PLAYER_RADIUS, 0, Math.PI * 2);
+                ctx.fill();
+
+                // IT Indicator
+                if (this.isIt) {
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, PLAYER_RADIUS + 5, 0, Math.PI * 2);
+                    ctx.stroke();
+                    
+                    // Simple "IT" text label above
+                    ctx.fillStyle = "#fff";
+                    ctx.font = "bold 10px Space Grotesk";
+                    ctx.textAlign = "center";
+                    ctx.fillText("TARGET", this.x, this.y - PLAYER_RADIUS - 10);
+                }
+
+                ctx.restore();
+            }
+        }
+
+        const p1 = new Player(1, 150, 300, '#00ffff', { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' });
+        const p2 = new Player(2, 650, 300, '#ff00ff', { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' });
+
+        function createShockwave(x, y, color) {
+            shockwaves.push({
+                x: x,
+                y: y,
+                radius: 10,
+                maxRadius: 100,
+                alpha: 1,
+                color: color
+            });
+        }
+
+        function startGame(duration) {
+            matchDuration = duration;
+            matchTimer = duration;
+            gameState = 'PLAYING';
+            
+            p1.reset();
+            p2.reset();
+
+            // Randomly pick who is IT first
+            if (Math.random() > 0.5) {
+                p1.isIt = true;
+                itPlayer = p1;
+            } else {
+                p2.isIt = true;
+                itPlayer = p2;
+            }
+
+            menuScreen.classList.add('hidden');
+            gameoverScreen.classList.add('hidden');
+            hud.classList.remove('hidden');
+
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resetToMenu() {
+            gameState = 'MENU';
+            menuScreen.classList.remove('hidden');
+            gameoverScreen.classList.add('hidden');
+            hud.classList.add('hidden');
+            statusMsg.style.opacity = 0;
+            shockwaves = [];
+        }
+
+        function handleTag() {
+            if (p1.stunTimer > 0 || p2.stunTimer > 0) return;
+
+            const dx = p1.x - p2.x;
+            const dy = p1.y - p2.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < PLAYER_RADIUS * 2) {
+                const tagger = p1.isIt ? p1 : p2;
+                const tagged = p1.isIt ? p2 : p1;
+
+                // Swap IT
+                tagger.isIt = false;
+                tagged.isIt = true;
+                itPlayer = tagged;
+
+                // Stun and effect
+                tagged.stunTimer = STUN_DURATION;
+                tagged.flashTime = 0.2;
+                createShockwave(tagged.x, tagged.y, tagged.color);
+
+                // UI Message
+                statusMsg.textContent = `PLAYER ${tagged.id} IS IT!`;
+                statusMsg.style.color = tagged.color;
+                statusMsg.style.opacity = 1;
+                setTimeout(() => {
+                    if (gameState === 'PLAYING') statusMsg.style.opacity = 0;
+                }, 1000);
+            }
+        }
+
+        function update(dt) {
+            if (gameState !== 'PLAYING') return;
+
+            matchTimer -= dt;
+            if (matchTimer <= 0) {
+                matchTimer = 0;
+                endGame();
+            }
+
+            p1.update(dt);
+            p2.update(dt);
+
+            handleTag();
+
+            // Update Shockwaves
+            for (let i = shockwaves.length - 1; i >= 0; i--) {
+                const s = shockwaves[i];
+                s.radius += 5;
+                s.alpha -= 0.03;
+                if (s.alpha <= 0) shockwaves.splice(i, 1);
+            }
+
+            // Update HUD
+            timerDisplay.textContent = Math.ceil(matchTimer).toString().padStart(2, '0');
+            p1ScoreDisplay.textContent = p1.survivalTime.toFixed(1) + 's';
+            p2ScoreDisplay.textContent = p2.survivalTime.toFixed(1) + 's';
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Subtle Grid Background
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+            ctx.lineWidth = 1;
+            for(let x=0; x<canvas.width; x+=40) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+            }
+            for(let y=0; y<canvas.height; y+=40) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+            }
+
+            // Shockwaves
+            shockwaves.forEach(s => {
+                ctx.save();
+                ctx.strokeStyle = s.color;
+                ctx.globalAlpha = s.alpha;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            p1.draw();
+            p2.draw();
+
+            // Stunned indicator overlaying canvas if needed
+            if (p1.stunTimer > 0 || p2.stunTimer > 0) {
+                // The status msg HTML element is used instead for cleaner visuals
+            }
+        }
+
+        function endGame() {
+            gameState = 'GAMEOVER';
+            gameoverScreen.classList.remove('hidden');
+            
+            if (p1.survivalTime > p2.survivalTime) {
+                winnerText.textContent = "PLAYER 1 WINS!";
+                winnerText.className = "text-6xl font-black font-display tracking-tighter mb-10 italic neon-text-cyan";
+            } else if (p2.survivalTime > p1.survivalTime) {
+                winnerText.textContent = "PLAYER 2 WINS!";
+                winnerText.className = "text-6xl font-black font-display tracking-tighter mb-10 italic neon-text-magenta";
+            } else {
+                winnerText.textContent = "IT'S A DRAW!";
+                winnerText.className = "text-6xl font-black font-display tracking-tighter mb-10 italic text-white";
+            }
+        }
+
+        function gameLoop(timestamp) {
+            if (gameState !== 'PLAYING') return;
+
+            const dt = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+
+            update(dt);
+            draw();
+
+            requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>

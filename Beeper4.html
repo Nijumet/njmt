@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+  <meta charset="UTF-8" />
+
+  <title>HTML Beeper with Visualizer</title>
+
+  <style>
+
+    body {
+
+      font-family: sans-serif;
+
+      padding: 20px;
+
+    }
+
+    .controls {
+
+      display: flex;
+
+      flex-direction: column;
+
+      gap: 12px;
+
+      max-width: 350px;
+
+    }
+
+    label {
+
+      display: flex;
+
+      justify-content: space-between;
+
+      align-items: center;
+
+      gap: 10px;
+
+    }
+
+    input[type="range"], select {
+
+      flex: 1;
+
+    }
+
+    button {
+
+      padding: 8px 12px;
+
+      cursor: pointer;
+
+    }
+
+    canvas {
+
+      width: 500px;
+
+      height: 150px;
+
+      background: #111;
+
+      border: 1px solid #444;
+
+      margin-top: 20px;
+
+    }
+
+  </style>
+
+</head>
+
+<body>
+
+  <h1>HTML Beeper + Visualizer</h1>
+
+
+
+  <div class="controls">
+
+    <button id="pulseBtn">Pulse</button>
+
+    <button id="toggleBtn">Start</button>
+
+    <button id="holdBtn">Hold to Beep</button>
+
+
+
+    <label>
+
+      <span>Pulse Length (ms)</span>
+
+      <input id="pulseLength" type="range" min="50" max="2000" value="500">
+
+    </label>
+
+
+
+    <label>
+
+      <span>Pitch (Hz)</span>
+
+      <input id="pitchSlider" type="range" min="100" max="2000" value="440">
+
+    </label>
+
+
+
+    <label>
+
+      <span>Volume</span>
+
+      <input id="volumeSlider" type="range" min="0" max="1" step="0.01" value="0.3">
+
+    </label>
+
+
+
+    <label>
+
+      <span>Waveform</span>
+
+      <select id="waveform">
+
+        <option value="sine">Sine</option>
+
+        <option value="square">Square</option>
+
+        <option value="sawtooth">Sawtooth</option>
+
+        <option value="triangle">Triangle</option>
+
+      </select>
+
+    </label>
+
+  </div>
+
+
+
+  <canvas id="visualizer"></canvas>
+
+
+
+  <script>
+
+    let audioCtx = null;
+
+    let osc = null;
+
+    let gainNode = null;
+
+    let analyser = null;
+
+    let isToggling = false;
+
+
+
+    const canvas = document.getElementById("visualizer");
+
+    const ctx = canvas.getContext("2d");
+
+
+
+    function initAudio() {
+
+      if (!audioCtx) {
+
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+
+
+        analyser = audioCtx.createAnalyser();
+
+        analyser.fftSize = 2048;
+
+      }
+
+    }
+
+
+
+    function createOscillator() {
+
+      initAudio();
+
+      osc = audioCtx.createOscillator();
+
+      gainNode = audioCtx.createGain();
+
+
+
+      osc.frequency.value = parseFloat(pitchSlider.value);
+
+      osc.type = waveform.value;
+
+      gainNode.gain.value = parseFloat(volumeSlider.value);
+
+
+
+      osc.connect(gainNode);
+
+      gainNode.connect(analyser);
+
+      analyser.connect(audioCtx.destination);
+
+    }
+
+
+
+    function startContinuousBeep() {
+
+      if (osc) return;
+
+      createOscillator();
+
+      osc.start();
+
+    }
+
+
+
+    function stopContinuousBeep() {
+
+      if (!osc) return;
+
+      osc.stop();
+
+      osc.disconnect();
+
+      gainNode.disconnect();
+
+      osc = null;
+
+      gainNode = null;
+
+    }
+
+
+
+    // Pulse button
+
+    pulseBtn.addEventListener("click", () => {
+
+      initAudio();
+
+      const localOsc = audioCtx.createOscillator();
+
+      const localGain = audioCtx.createGain();
+
+
+
+      localOsc.frequency.value = parseFloat(pitchSlider.value);
+
+      localOsc.type = waveform.value;
+
+      localGain.gain.value = parseFloat(volumeSlider.value);
+
+
+
+      localOsc.connect(localGain);
+
+      localGain.connect(analyser);
+
+      analyser.connect(audioCtx.destination);
+
+
+
+      localOsc.start();
+
+
+
+      const duration = parseInt(pulseLength.value);
+
+
+
+      setTimeout(() => {
+
+        localOsc.stop();
+
+        localOsc.disconnect();
+
+        localGain.disconnect();
+
+      }, duration);
+
+    });
+
+
+
+    // Toggle continuous beep
+
+    toggleBtn.addEventListener("click", (e) => {
+
+      isToggling = !isToggling;
+
+      if (isToggling) {
+
+        startContinuousBeep();
+
+        e.target.textContent = "Pause";
+
+      } else {
+
+        stopContinuousBeep();
+
+        e.target.textContent = "Start";
+
+      }
+
+    });
+
+
+
+    // Hold-to-beep
+
+    holdBtn.addEventListener("mousedown", () => {
+
+      startContinuousBeep();
+
+    });
+
+
+
+    document.addEventListener("mouseup", () => {
+
+      stopContinuousBeep();
+
+    });
+
+
+
+    // Live pitch + volume updates
+
+    pitchSlider.addEventListener("input", () => {
+
+      if (osc) osc.frequency.value = parseFloat(pitchSlider.value);
+
+    });
+
+
+
+    volumeSlider.addEventListener("input", () => {
+
+      if (gainNode) gainNode.gain.value = parseFloat(volumeSlider.value);
+
+    });
+
+
+
+    waveform.addEventListener("change", () => {
+
+      if (osc) osc.type = waveform.value;
+
+    });
+
+
+
+    // Visualizer loop
+
+    function draw() {
+
+      requestAnimationFrame(draw);
+
+
+
+      if (!analyser) return;
+
+
+
+      const buffer = new Uint8Array(analyser.fftSize);
+
+      analyser.getByteTimeDomainData(buffer);
+
+
+
+      ctx.fillStyle = "#111";
+
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+
+
+      ctx.lineWidth = 2;
+
+      ctx.strokeStyle = "#0f0";
+
+      ctx.beginPath();
+
+
+
+      const slice = canvas.width / buffer.length;
+
+
+
+      for (let i = 0; i < buffer.length; i++) {
+
+        const v = buffer[i] / 128.0;
+
+        const y = (v * canvas.height) / 2;
+
+
+
+        if (i === 0) ctx.moveTo(0, y);
+
+        else ctx.lineTo(i * slice, y);
+
+      }
+
+
+
+      ctx.stroke();
+
+    }
+
+
+
+    draw();
+
+  </script>
+
+</body>
+
+</html>
+

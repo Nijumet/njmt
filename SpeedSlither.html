@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slinky Snake | Immersive Arcade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700&family=Plus+Jakarta+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        display: ['Outfit', 'sans-serif'],
+                        body: ['Plus Jakarta Sans', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#4CAF50',
+                        primaryDark: '#3d8b40',
+                        snakeHead: '#4CAF50',
+                        snakeBody: '#81C784',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0f0f12; /* Darker, premium background */
+            color: #ffffff;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            pointer-events: auto;
+        }
+
+        #score-container {
+            align-self: flex-start;
+            padding: 12px 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            animation: slideInDown 0.5s ease-out;
+        }
+
+        #game-over {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 400px;
+            padding: 48px;
+            text-align: center;
+            display: none;
+            flex-direction: column;
+            gap: 24px;
+            z-index: 100;
+            animation: scaleIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes slideInDown {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes scaleIn {
+            from { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+            to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            color: white;
+            font-weight: 700;
+            padding: 14px 32px;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+            filter: brightness(1.1);
+        }
+
+        .btn-primary:active {
+            transform: translateY(1px);
+        }
+
+        #vignette {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.4) 100%);
+            pointer-events: none;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+    <div id="vignette"></div>
+    
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui-layer">
+        <div id="score-container" class="glass-panel">
+            <div class="text-xs uppercase tracking-widest opacity-60 font-bold mb-1">Current Score</div>
+            <div id="score" class="text-4xl font-display font-bold text-white leading-none">0</div>
+        </div>
+    </div>
+
+    <div id="game-over" class="glass-panel">
+        <h2 class="text-4xl font-display font-bold mb-2">Game Over</h2>
+        <div class="space-y-1">
+            <p class="text-sm uppercase tracking-widest opacity-60">Final Score</p>
+            <p id="final-score" class="text-5xl font-display font-bold text-primary">0</p>
+        </div>
+        <p class="text-white/70 text-sm mt-4">The slinky snake collided with its own path.</p>
+        <button id="retry-btn" class="btn-primary mt-4" onclick="resetGame()">Try Again</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const finalScoreElement = document.getElementById('final-score');
+        const gameOverDiv = document.getElementById('game-over');
+
+        const CONFIG = {
+            snakeSpeed: 3.5,
+            segmentDistance: 9,
+            initialSegments: 15,
+            foodCount: 180,
+            worldSize: 6000,
+            snakeRadius: 12,
+            foodRadius: 6,
+            gridSpacing: 120,
+            collisionGracePeriod: 30 // Segments to ignore for self-collision
+        };
+
+        let snake = [];
+        let food = [];
+        let mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+        let camera = { x: 0, y: 0 };
+        let score = 0;
+        let isGameOver = false;
+        let angle = 0;
+
+        function init() {
+            window.addEventListener('resize', resize);
+            window.addEventListener('mousemove', (e) => {
+                mouse.x = e.clientX;
+                mouse.y = e.clientY;
+            });
+            
+            // Touch support
+            window.addEventListener('touchmove', (e) => {
+                if (e.touches[0]) {
+                    mouse.x = e.touches[0].clientX;
+                    mouse.y = e.touches[0].clientY;
+                }
+            }, { passive: false });
+
+            resize();
+            resetGame();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        function resetGame() {
+            snake = [];
+            for (let i = 0; i < CONFIG.initialSegments; i++) {
+                snake.push({ x: 0, y: i * CONFIG.segmentDistance });
+            }
+            
+            food = [];
+            for (let i = 0; i < CONFIG.foodCount; i++) {
+                spawnFood();
+            }
+
+            score = 0;
+            updateScoreDisplay();
+            isGameOver = false;
+            gameOverDiv.style.display = 'none';
+            camera = { x: 0, y: 0 };
+        }
+
+        function spawnFood() {
+            // Random point in circle
+            const r = Math.random() * CONFIG.worldSize;
+            const theta = Math.random() * 2 * Math.PI;
+            food.push({
+                x: r * Math.cos(theta),
+                y: r * Math.sin(theta),
+                color: `hsl(${Math.random() * 360}, 70%, 60%)`,
+                pulse: Math.random() * Math.PI * 2 // For animation
+            });
+        }
+
+        function updateScoreDisplay() {
+            scoreElement.innerText = score.toLocaleString();
+        }
+
+        function update() {
+            if (isGameOver) return;
+
+            const head = snake[0];
+            
+            // Calculate movement direction toward mouse
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const targetAngle = Math.atan2(mouse.y - centerY, mouse.x - centerX);
+            
+            // Smooth rotation
+            let angleDiff = targetAngle - angle;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            angle += angleDiff * 0.15;
+
+            // Move head
+            head.x += Math.cos(angle) * CONFIG.snakeSpeed;
+            head.y += Math.sin(angle) * CONFIG.snakeSpeed;
+
+            // Update camera to follow head
+            camera.x = head.x;
+            camera.y = head.y;
+
+            // Follower logic
+            for (let i = 1; i < snake.length; i++) {
+                const seg = snake[i];
+                const prev = snake[i - 1];
+                const dx = prev.x - seg.x;
+                const dy = prev.y - seg.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist > CONFIG.segmentDistance) {
+                    const moveDist = dist - CONFIG.segmentDistance;
+                    seg.x += (dx / dist) * moveDist;
+                    seg.y += (dy / dist) * moveDist;
+                }
+            }
+
+            // Food collision
+            for (let i = food.length - 1; i >= 0; i--) {
+                const f = food[i];
+                const dx = head.x - f.x;
+                const dy = head.y - f.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist < CONFIG.snakeRadius + CONFIG.foodRadius) {
+                    food.splice(i, 1);
+                    score += 10;
+                    updateScoreDisplay();
+                    growSnake();
+                    spawnFood();
+                }
+            }
+
+            // Self collision
+            if (snake.length > CONFIG.collisionGracePeriod) {
+                for (let i = CONFIG.collisionGracePeriod; i < snake.length; i++) {
+                    const seg = snake[i];
+                    const dx = head.x - seg.x;
+                    const dy = head.y - seg.y;
+                    const distSq = dx * dx + dy * dy;
+                    if (distSq < (CONFIG.snakeRadius * 1.2) ** 2) {
+                        endGame();
+                    }
+                }
+            }
+
+            // Bound check (soft boundary)
+            const distFromCenter = Math.sqrt(head.x * head.x + head.y * head.y);
+            if (distFromCenter > CONFIG.worldSize) {
+                // Apply force back to center
+                const backAngle = Math.atan2(-head.y, -head.x);
+                head.x += Math.cos(backAngle) * 5;
+                head.y += Math.sin(backAngle) * 5;
+            }
+        }
+
+        function growSnake() {
+            const last = snake[snake.length - 1];
+            // Add segments for more substantial growth
+            snake.push({ x: last.x, y: last.y });
+            snake.push({ x: last.x, y: last.y });
+        }
+
+        function endGame() {
+            isGameOver = true;
+            finalScoreElement.innerText = score.toLocaleString();
+            gameOverDiv.style.display = 'flex';
+        }
+
+        function draw() {
+            ctx.fillStyle = '#0f0f12';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const offsetX = canvas.width / 2 - camera.x;
+            const offsetY = canvas.height / 2 - camera.y;
+
+            // Background Grid
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+            ctx.lineWidth = 2;
+            const startX = (camera.x - canvas.width / 2) % CONFIG.gridSpacing;
+            const startY = (camera.y - canvas.height / 2) % CONFIG.gridSpacing;
+
+            ctx.beginPath();
+            for (let x = -startX; x < canvas.width; x += CONFIG.gridSpacing) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+            }
+            for (let y = -startY; y < canvas.height; y += CONFIG.gridSpacing) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+            }
+            ctx.stroke();
+
+            // World Border
+            ctx.beginPath();
+            ctx.arc(offsetX, offsetY, CONFIG.worldSize, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 5;
+            ctx.stroke();
+
+            // Draw Food
+            food.forEach(f => {
+                f.pulse += 0.1;
+                const pSize = Math.sin(f.pulse) * 1.5;
+                
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = f.color;
+                ctx.fillStyle = f.color;
+                ctx.beginPath();
+                ctx.arc(f.x + offsetX, f.y + offsetY, CONFIG.foodRadius + pSize, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+
+            // Draw Snake (back to front)
+            for (let i = snake.length - 1; i >= 0; i--) {
+                const seg = snake[i];
+                const isHead = (i === 0);
+                
+                // Segment size tapers slightly towards tail
+                const radius = CONFIG.snakeRadius * (0.6 + 0.4 * (1 - i / snake.length));
+                
+                ctx.fillStyle = isHead ? '#4CAF50' : '#81C784';
+                
+                // Add a slight gradient/depth
+                if (isHead) {
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = 'rgba(76, 175, 80, 0.5)';
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+
+                ctx.beginPath();
+                ctx.arc(seg.x + offsetX, seg.y + offsetY, radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Eyes on head
+                if (isHead) {
+                    ctx.shadowBlur = 0;
+                    const eyeOffset = 6;
+                    const eyeRadius = 3;
+                    
+                    // Left Eye
+                    const lex = seg.x + offsetX + Math.cos(angle - 0.5) * eyeOffset;
+                    const ley = seg.y + offsetY + Math.sin(angle - 0.5) * eyeOffset;
+                    ctx.fillStyle = 'white';
+                    ctx.beginPath();
+                    ctx.arc(lex, ley, eyeRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Right Eye
+                    const rex = seg.x + offsetX + Math.cos(angle + 0.5) * eyeOffset;
+                    const rey = seg.y + offsetY + Math.sin(angle + 0.5) * eyeOffset;
+                    ctx.beginPath();
+                    ctx.arc(rex, rey, eyeRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Pupils
+                    ctx.fillStyle = 'black';
+                    ctx.beginPath();
+                    ctx.arc(lex + Math.cos(angle) * 1, ley + Math.sin(angle) * 1, 1.5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(rex + Math.cos(angle) * 1, rey + Math.sin(angle) * 1, 1.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        init();
+    </script>
+</body>
+</html>

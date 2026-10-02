@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+  <meta charset="UTF-8" />
+
+  <title>Sand‑like Physics Particles</title>
+
+  <style>
+
+    html, body {
+
+      margin: 0;
+
+      padding: 0;
+
+      overflow: hidden;
+
+      background: #111;
+
+    }
+
+    canvas {
+
+      display: block;
+
+      background: #222;
+
+    }
+
+  </style>
+
+</head>
+
+<body>
+
+<canvas id="canvas"></canvas>
+
+<script>
+
+const canvas = document.getElementById("canvas");
+
+const ctx = canvas.getContext("2d");
+
+
+
+function resize() {
+
+  canvas.width = window.innerWidth;
+
+  canvas.height = window.innerHeight;
+
+}
+
+window.addEventListener("resize", resize);
+
+resize();
+
+
+
+const squares = [];
+
+const size = 6;                     // MUCH smaller
+
+const gravity = 900;
+
+let restitution = 0.9 * 0.25;       // 25% as bouncy as before
+
+const bottomFriction = 0.8;
+
+const mouseRepelStrength = 150000;
+
+const squareFriction = 0.9;
+
+
+
+let mouseX = 0;
+
+let mouseY = 0;
+
+let mouseDown = false;
+
+let mouseInside = false;
+
+
+
+canvas.addEventListener("mousemove", e => {
+
+  const rect = canvas.getBoundingClientRect();
+
+  mouseX = e.clientX - rect.left;
+
+  mouseY = e.clientY - rect.top;
+
+  mouseInside = true;
+
+});
+
+canvas.addEventListener("mouseleave", () => {
+
+  mouseInside = false;
+
+});
+
+
+
+canvas.addEventListener("mousedown", () => mouseDown = true);
+
+canvas.addEventListener("mouseup", () => mouseDown = false);
+
+
+
+function randomColor() {
+
+  return `hsl(${Math.random() * 360}, 70%, 60%)`;
+
+}
+
+
+
+function spawnParticle() {
+
+  squares.push({
+
+    x: mouseX - size / 2,
+
+    y: mouseY - size / 2,
+
+    vx: (Math.random() - 0.5) * 40,
+
+    vy: (Math.random() - 0.5) * 40,
+
+    size,
+
+    color: randomColor()
+
+  });
+
+}
+
+
+
+function update(dt) {
+
+  // Continuous spawning while mouse is held
+
+  if (mouseDown && mouseInside) {
+
+    for (let i = 0; i < 4; i++) spawnParticle(); // spawn rate
+
+  }
+
+
+
+  for (const s of squares) {
+
+    s.vy += gravity * dt;
+
+
+
+    if (mouseInside) {
+
+      const cx = s.x + s.size / 2;
+
+      const cy = s.y + s.size / 2;
+
+      let dx = cx - mouseX;
+
+      let dy = cy - mouseY;
+
+      const distSq = dx * dx + dy * dy;
+
+      if (distSq > 1) {
+
+        const dist = Math.sqrt(distSq);
+
+        dx /= dist;
+
+        dy /= dist;
+
+        const forceMag = mouseRepelStrength / distSq;
+
+        s.vx += dx * forceMag * dt;
+
+        s.vy += dy * forceMag * dt;
+
+      }
+
+    }
+
+
+
+    s.x += s.vx * dt;
+
+    s.y += s.vy * dt;
+
+  }
+
+
+
+  // Wall collisions
+
+  for (const s of squares) {
+
+    if (s.x < 0) {
+
+      s.x = 0;
+
+      s.vx = -s.vx * restitution;
+
+    }
+
+    if (s.x + s.size > canvas.width) {
+
+      s.x = canvas.width - s.size;
+
+      s.vx = -s.vx * restitution;
+
+    }
+
+    if (s.y < 0) {
+
+      s.y = 0;
+
+      s.vy = -s.vy * restitution;
+
+    }
+
+    if (s.y + s.size > canvas.height) {
+
+      s.y = canvas.height - s.size;
+
+      s.vy = -s.vy * restitution;
+
+      s.vx *= bottomFriction;
+
+    }
+
+  }
+
+
+
+  // Square–square collisions
+
+  for (let i = 0; i < squares.length; i++) {
+
+    for (let j = i + 1; j < squares.length; j++) {
+
+      const a = squares[i];
+
+      const b = squares[j];
+
+
+
+      if (
+
+        a.x < b.x + b.size &&
+
+        a.x + a.size > b.x &&
+
+        a.y < b.y + b.size &&
+
+        a.y + a.size > b.y
+
+      ) {
+
+        const overlapX1 = a.x + a.size - b.x;
+
+        const overlapX2 = b.x + b.size - a.x;
+
+        const overlapY1 = a.y + a.size - b.y;
+
+        const overlapY2 = b.y + b.size - a.y;
+
+
+
+        const penX = overlapX1 < overlapX2 ? overlapX1 : -overlapX2;
+
+        const penY = overlapY1 < overlapY2 ? overlapY1 : -overlapY2;
+
+
+
+        if (Math.abs(penX) < Math.abs(penY)) {
+
+          const half = penX / 2;
+
+          a.x -= half;
+
+          b.x += half;
+
+
+
+          const vxA = a.vx;
+
+          const vxB = b.vx;
+
+          a.vx = vxB * restitution;
+
+          b.vx = vxA * restitution;
+
+
+
+          a.vx *= squareFriction;
+
+          b.vx *= squareFriction;
+
+
+
+        } else {
+
+          const half = penY / 2;
+
+          a.y -= half;
+
+          b.y += half;
+
+
+
+          const vyA = a.vy;
+
+          const vyB = b.vy;
+
+          a.vy = vyB * restitution;
+
+          b.vy = vyA * restitution;
+
+
+
+          a.vy *= squareFriction;
+
+          b.vy *= squareFriction;
+
+        }
+
+      }
+
+    }
+
+  }
+
+}
+
+
+
+function draw() {
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (const s of squares) {
+
+    ctx.fillStyle = s.color;
+
+    ctx.fillRect(s.x, s.y, s.size, s.size);
+
+  }
+
+}
+
+
+
+let lastTime = performance.now();
+
+function loop(now) {
+
+  const dt = Math.min((now - lastTime) / 1000, 0.033);
+
+  lastTime = now;
+
+  update(dt);
+
+  draw();
+
+  requestAnimationFrame(loop);
+
+}
+
+requestAnimationFrame(loop);
+
+</script>
+
+</body>
+
+</html>
+
