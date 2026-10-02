@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NJMT</title>
+
+<style>
+  /* ---- Page background: black, like a terminal ---- */
+  body {
+    background-color: #000000;
+    color: #00ff66;
+    font-family: "Courier New", monospace;
+    text-align: center;
+    padding: 60px 40px;
+  }
+
+  /* ---- Big glowing title ---- */
+  h1 {
+    font-size: 48px;
+    color: #00ff66;
+    text-shadow: 0 0 10px #00ff66, 0 0 20px #00ff66;
+    letter-spacing: 4px;
+    margin-bottom: 50px;
+  }
+
+  /* ---- Grid that holds all the boxes ----
+         auto-fill + minmax means it keeps adding columns
+         as space allows, and wraps to new rows automatically.
+         Add more boxes in the JS list below and the grid
+         will just grow to fit them. ---- */
+  .button-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 28px;
+    max-width: 1300px;
+    margin: 0 auto;
+  }
+
+  /* ---- Each neon green box/button ---- */
+  .neon-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 16px;
+    background-color: #000000;
+    color: #00ff66;
+    border: 2px solid #00ff66;
+    border-radius: 8px;
+    font-family: "Courier New", monospace;
+    font-size: 22px;
+    text-decoration: none;
+    text-shadow: 0 0 5px #00ff66;
+    box-shadow: 0 0 10px #00ff66;
+    transition: all 0.2s ease-in-out;
+  }
+
+  /* ---- Glow gets brighter when you hover over a box ---- */
+  .neon-button:hover {
+    background-color: #00ff66;
+    color: #000000;
+    text-shadow: none;
+    box-shadow: 0 0 25px #00ff66;
+  }
+
+  /* ---- Fullscreen canvas that floats behind everything ---- */
+  #particles {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1; /* keeps it behind the title and boxes */
+  }
+</style>
+</head>
+
+<body>
+
+  <!-- Canvas where the floating green particles are drawn -->
+  <canvas id="particles"></canvas>
+
+  <!-- Page title -->
+  <h1>NJMT</h1>
+
+  <!-- The grid gets filled in by JavaScript, from the list below -->
+  <div class="button-grid" id="buttonGrid"></div>
+
+  <script>
+    // =====================================================
+    // EDIT THIS LIST TO ADD, REMOVE, OR RENAME BOXES.
+    // Each line is one box: { label: "text shown", url: "where it links" }
+    // Just add a new { ... } line (with a comma above it)
+    // and the grid will automatically fit it in.
+    // =====================================================
+    const buttons = [
+      { label: "AI Snake Duel",  url: "https://example.com" },
+      { label: "Beeper",  url: "https://example.com" },
+      { label: "Blade Orbit",  url: "https://example.com" },
+      { label: "Blast Arena",  url: "https://example.com" },
+      { label: "Cow Abductor",  url: "https://example.com" },
+      { label: "Drift Arrow",  url: "https://example.com" },
+      { label: "Fake Browser",  url: "https://example.com" },
+      { label: "Fluid Lab",  url: "https://example.com" },
+      { label: "Kaleidiscope Canvas",  url: "https://example.com" },
+      { label: "Word Fill", url: "https://example.com" },
+      { label: "Neon Tag", url: "https://example.com" },
+      { label: "Pack Opener", url: "https://example.com" },
+      { label: "Spray Sandbox", url: "https://example.com" },
+      { label: "Infinite Fall", url: "https://example.com" },
+      { label: "Solo Snake", url: "https://example.com" },
+      { label: "Floaty Sand", url: "https://example.com" },
+      { label: "Time Swap", url: "https://example.com" }
+    ];
+
+    // ---- Build one <a class="neon-button"> per entry in the list above ----
+    const grid = document.getElementById("buttonGrid");
+    buttons.forEach(btn => {
+      const link = document.createElement("a");
+      link.className = "neon-button";
+      link.href = btn.url;
+      link.textContent = btn.label;
+      grid.appendChild(link);
+    });
+
+    // =====================================================
+    // PARTICLE EFFECT (floating green dots in the background)
+    // =====================================================
+    const canvas = document.getElementById("particles");
+    const ctx = canvas.getContext("2d");
+
+    // ---- Make the canvas fill the whole browser window ----
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
+
+    // ---- How many particles to create ----
+    const PARTICLE_COUNT = 80;
+    const particles = [];
+
+    // ---- Give each particle a random starting position, size, and speed ----
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        radius: Math.random() * 2 + 1,       // size of the dot
+        speedY: Math.random() * 0.5 + 0.1,   // how fast it drifts upward
+        drift: Math.random() * 0.4 - 0.2,    // slight left/right wobble
+        alpha: Math.random() * 0.5 + 0.3     // how bright/glowy it looks
+      });
+    }
+
+    // ---- Draw one frame: clear screen, move + draw every particle ----
+    function drawParticles() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      particles.forEach(p => {
+        // Move the particle upward and slightly sideways
+        p.y -= p.speedY;
+        p.x += p.drift;
+
+        // If it drifts off the top, send it back to the bottom
+        if (p.y < 0) {
+          p.y = canvas.height;
+          p.x = Math.random() * canvas.width;
+        }
+
+        // Draw a glowing green dot
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0, 255, 102, ${p.alpha})`;
+        ctx.shadowColor = "#00ff66";
+        ctx.shadowBlur = 8;
+        ctx.fill();
+      });
+
+      // ---- Loop this function forever, in sync with the browser's refresh rate ----
+      requestAnimationFrame(drawParticles);
+    }
+
+    drawParticles();
+  </script>
+
+</body>
+</html>
