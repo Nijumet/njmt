@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NJMT</title>
+
+<style>
+  /* ---- Page background: black, like a terminal ---- */
+  body {
+    background-color: #000000;
+    color: #00ff66;
+    font-family: "Courier New", monospace;
+    text-align: center;
+    padding: 60px 20px;
+  }
+
+  /* ---- Big glowing heading ---- */
+  h1 {
+    font-size: 44px;
+    color: #00ff66;
+    text-shadow: 0 0 10px #00ff66, 0 0 20px #00ff66;
+    letter-spacing: 4px;
+    margin-bottom: 40px;
+  }
+
+  /* ---- The image, with a glowing green border ---- */
+  .page-image {
+    width: 240px;
+    height: 240px;
+    border: 2px solid #00ff66;
+    border-radius: 8px;
+    box-shadow: 0 0 20px #00ff66;
+    margin-bottom: 30px;
+  }
+
+  /* ---- Text block under the image ---- */
+  .page-text {
+    max-width: 500px;
+    margin: 0 auto 40px auto;
+    font-size: 18px;
+    line-height: 1.6;
+    text-shadow: 0 0 5px #00ff66;
+  }
+
+  /* ---- Row that holds the buttons side by side ---- */
+  .button-row {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+  }
+
+  /* ---- The neon green button ---- */
+  .neon-button {
+    display: inline-block;
+    padding: 18px 36px;
+    background-color: #000000;
+    color: #00ff66;
+    border: 2px solid #00ff66;
+    border-radius: 8px;
+    font-family: "Courier New", monospace;
+    font-size: 18px;
+    text-decoration: none;
+    text-shadow: 0 0 5px #00ff66;
+    box-shadow: 0 0 10px #00ff66;
+    transition: all 0.2s ease-in-out;
+  }
+
+  /* ---- Glow gets brighter when you hover over the button ---- */
+  .neon-button:hover {
+    background-color: #00ff66;
+    color: #000000;
+    text-shadow: none;
+    box-shadow: 0 0 25px #00ff66;
+  }
+
+  /* ---- Fullscreen canvas that floats behind everything ---- */
+  #particles {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1; /* keeps it behind everything else */
+  }
+</style>
+</head>
+
+<body>
+
+  <!-- Canvas where the floating green particles are drawn -->
+  <canvas id="particles"></canvas>
+
+  <!-- Heading -->
+  <h1>Drift Arrow</h1>
+
+  <!-- Image. Swap the "src" below for your own image file or URL. -->
+  <img class="page-image" src="DriftArrowIMG.png" alt="Game Screenshot">
+
+  <!-- Text under the image -->
+  <p class="page-text">
+    Drift around obstacles, accelerate with boost circles, and race to the finish line! 
+    Use W to accelerate, A and D to turn, S to drift, and SHIFT for a sudden boost. 
+    If you collide with anything, you have to restart. Can you beat Nijumet's time of 8.06 seconds?
+  </p>
+
+  <!-- Buttons -->
+  <div class="button-row">
+    <a class="neon-button" href="index.html">Back</a>
+    <a class="neon-button" href="DriftArrow.html">Play</a>
+  </div>
+
+  <script>
+    // =====================================================
+    // PARTICLE EFFECT (floating green dots in the background)
+    // =====================================================
+    const canvas = document.getElementById("particles");
+    const ctx = canvas.getContext("2d");
+
+    // ---- Make the canvas fill the whole browser window ----
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
+
+    // ---- How many particles to create ----
+    const PARTICLE_COUNT = 120;
+    const particles = [];
+
+    // ---- Give each particle a random starting position, size, and speed ----
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        radius: Math.random() * 2 + 1,       // size of the dot
+        speedY: Math.random() * 0.5 + 0.1,   // how fast it drifts upward
+        drift: Math.random() * 0.4 - 0.2,    // slight left/right wobble
+        alpha: Math.random() * 0.5 + 0.3     // how bright/glowy it looks
+      });
+    }
+
+    // ---- Draw one frame: clear screen, move + draw every particle ----
+    function drawParticles() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      particles.forEach(p => {
+        // Move the particle upward and slightly sideways
+        p.y -= p.speedY;
+        p.x += p.drift;
+
+        // If it drifts off the top, send it back to the bottom
+        if (p.y < 0) {
+          p.y = canvas.height;
+          p.x = Math.random() * canvas.width;
+        }
+
+        // Draw a glowing green dot
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0, 255, 102, ${p.alpha})`;
+        ctx.shadowColor = "#00ff66";
+        ctx.shadowBlur = 8;
+        ctx.fill();
+      });
+
+      // ---- Loop this function forever, in sync with the browser's refresh rate ----
+      requestAnimationFrame(drawParticles);
+    }
+
+    drawParticles();
+  </script>
+
+</body>
+</html>
