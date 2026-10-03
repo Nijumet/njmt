@@ -2,32 +2,51 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#000000">
 <title>NJMT</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='black'/><text x='50' y='72' font-size='64' text-anchor='middle' fill='%2300ff66' font-family='monospace' font-weight='bold'>N</text></svg>">
 
 <style>
-  /* ---- Page background: black, like a terminal ---- */
+  :root {
+    --green: #00ff66;
+    --green-dim: rgba(0, 255, 102, 0.55);
+    --bg: #000000;
+  }
+
+  * { box-sizing: border-box; }
+
   body {
-    background-color: #000000;
-    color: #00ff66;
+    margin: 0;
+    min-height: 100vh;
+    background-color: var(--bg);
+    color: var(--green);
     font-family: "Courier New", monospace;
     text-align: center;
-    padding: 60px 40px;
+    padding: 60px 40px 80px;
   }
 
-  /* ---- Big glowing title ---- */
+  /* ---- Title: glowing, flickers on once at load ---- */
   h1 {
-    font-size: 94px;
-    color: #00ff66;
-    text-shadow: 0 0 10px #00ff66, 0 0 20px #00ff66;
+    font-size: clamp(56px, 12vw, 94px);
+    color: var(--green);
+    text-shadow: 0 0 10px var(--green), 0 0 20px var(--green);
     letter-spacing: 4px;
-    margin-bottom: 50px;
+    margin: 0 0 50px;
+    animation: powerOn 1.1s steps(1, end) both;
   }
 
-  /* ---- Grid that holds all the boxes ----
-         auto-fill + minmax means it keeps adding columns
-         as space allows, and wraps to new rows automatically.
-         Add more boxes in the JS list below and the grid
-         will just grow to fit them. ---- */
+  @keyframes powerOn {
+    0%   { opacity: 0; }
+    8%   { opacity: 1; }
+    14%  { opacity: 0.1; }
+    22%  { opacity: 1; }
+    30%  { opacity: 0.4; }
+    38%  { opacity: 1; }
+    100% { opacity: 1; }
+  }
+
+  /* ---- Grid ---- */
   .button-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
@@ -36,54 +55,103 @@
     margin: 0 auto;
   }
 
-  /* ---- Each neon green box/button ---- */
+  /* ---- Neon boxes ---- */
   .neon-button {
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 40px 16px;
-    background-color: #000000;
-    color: #00ff66;
-    border: 2px solid #00ff66;
+    background-color: var(--bg);
+    color: var(--green);
+    border: 2px solid var(--green);
     border-radius: 8px;
     font-family: "Courier New", monospace;
     font-size: 22px;
     text-decoration: none;
-    text-shadow: 0 0 5px #00ff66;
-    box-shadow: 0 0 10px #00ff66;
-    transition: all 0.2s ease-in-out;
+    text-shadow: 0 0 5px var(--green);
+    box-shadow: 0 0 10px var(--green);
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out,
+                box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out;
+    opacity: 0;
+    animation: bootIn 0.35s steps(4, end) forwards;
+    animation-delay: calc(0.5s + var(--i, 0) * 40ms);
   }
 
-  /* ---- Glow gets brighter when you hover over a box ---- */
-  .neon-button:hover {
-    background-color: #00ff66;
-    color: #000000;
+  @keyframes bootIn {
+    0%   { opacity: 0; }
+    50%  { opacity: 0.6; }
+    100% { opacity: 1; }
+  }
+
+  .neon-button:hover,
+  .neon-button:focus-visible {
+    background-color: var(--green);
+    color: var(--bg);
     text-shadow: none;
-    box-shadow: 0 0 25px #00ff66;
+    box-shadow: 0 0 25px var(--green), 0 0 50px var(--green-dim);
+    transform: translateY(-3px);
+    outline: none;
   }
 
-  /* ---- Fullscreen canvas that floats behind everything ---- */
+  .neon-button:focus-visible {
+    outline: 2px dashed var(--green);
+    outline-offset: 5px;
+  }
+
+  .neon-button:active {
+    transform: translateY(0) scale(0.98);
+  }
+
+  /* ---- Particle canvas ---- */
   #particles {
     position: fixed;
-    top: 0;
-    left: 0;
+    inset: 0;
     width: 100%;
     height: 100%;
-    z-index: -1; /* keeps it behind the title and boxes */
+    z-index: -2;
+  }
+
+  /* ---- CRT overlay: faint scanlines + edge vignette ---- */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0) 0,
+        rgba(0, 0, 0, 0) 2px,
+        rgba(0, 0, 0, 0.18) 3px
+      ),
+      radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.7) 100%);
+  }
+
+  /* ---- Small screens ---- */
+  @media (max-width: 600px) {
+    body { padding: 40px 20px 60px; }
+    h1 { margin-bottom: 36px; letter-spacing: 2px; }
+    .button-grid { gap: 18px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .neon-button { padding: 28px 12px; font-size: 18px; }
+  }
+
+  /* ---- Respect reduced-motion settings ---- */
+  @media (prefers-reduced-motion: reduce) {
+    h1, .neon-button { animation: none; opacity: 1; }
+    .neon-button { transition: none; }
+    .neon-button:hover, .neon-button:focus-visible { transform: none; }
   }
 </style>
 </head>
 
 <body>
 
-  <!-- Canvas where the floating green particles are drawn -->
-  <canvas id="particles"></canvas>
+  <canvas id="particles" aria-hidden="true"></canvas>
 
-  <!-- Page title -->
   <h1>NJMT</h1>
 
-  <!-- The grid gets filled in by JavaScript, from the list below -->
-  <div class="button-grid" id="buttonGrid"></div>
+  <nav class="button-grid" id="buttonGrid" aria-label="Games and tools"></nav>
 
   <script>
     // =====================================================
@@ -112,13 +180,14 @@
       { label: "Time Swap", url: "TimeSwapHUB.html" }
     ];
 
-    // ---- Build one <a class="neon-button"> per entry in the list above ----
+    // ---- Build one <a class="neon-button"> per entry; --i staggers the boot-in ----
     const grid = document.getElementById("buttonGrid");
-    buttons.forEach(btn => {
+    buttons.forEach((btn, i) => {
       const link = document.createElement("a");
       link.className = "neon-button";
       link.href = btn.url;
       link.textContent = btn.label;
+      link.style.setProperty("--i", i);
       grid.appendChild(link);
     });
 
@@ -127,60 +196,96 @@
     // =====================================================
     const canvas = document.getElementById("particles");
     const ctx = canvas.getContext("2d");
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    // ---- Make the canvas fill the whole browser window ----
+    let width = 0, height = 0;
+
+    // ---- Fill the window, crisp on high-DPI screens ----
     function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      const dpr = window.devicePixelRatio || 1;
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
     resizeCanvas();
     window.addEventListener("resize", resizeCanvas);
 
-    // ---- How many particles to create ----
-    const PARTICLE_COUNT = 80;
+    // ---- Pointer position, used to nudge particles away ----
+    const pointer = { x: -9999, y: -9999 };
+    window.addEventListener("pointermove", e => { pointer.x = e.clientX; pointer.y = e.clientY; });
+    window.addEventListener("pointerleave", () => { pointer.x = pointer.y = -9999; });
+
+    const PARTICLE_COUNT = 250;
+    const REPEL_RADIUS = 110;
     const particles = [];
 
-    // ---- Give each particle a random starting position, size, and speed ----
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       particles.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        radius: Math.random() * 2 + 1,       // size of the dot
-        speedY: Math.random() * 0.5 + 0.1,   // how fast it drifts upward
-        drift: Math.random() * 0.4 - 0.2,    // slight left/right wobble
-        alpha: Math.random() * 0.5 + 0.3     // how bright/glowy it looks
+        x: Math.random() * width,
+        y: Math.random() * height,
+        radius: Math.random() * 2 + 1,
+        speedY: Math.random() * 0.5 + 0.1,
+        drift: Math.random() * 0.4 - 0.2,
+        alpha: Math.random() * 0.5 + 0.3,
+        vx: 0,
+        vy: 0
       });
     }
 
-    // ---- Draw one frame: clear screen, move + draw every particle ----
+    // ---- Glow is set once per frame, not once per particle ----
     function drawParticles() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, width, height);
+      ctx.shadowColor = "#00ff66";
+      ctx.shadowBlur = 8;
 
       particles.forEach(p => {
-        // Move the particle upward and slightly sideways
-        p.y -= p.speedY;
-        p.x += p.drift;
-
-        // If it drifts off the top, send it back to the bottom
-        if (p.y < 0) {
-          p.y = canvas.height;
-          p.x = Math.random() * canvas.width;
+        // Gentle push away from the pointer
+        const dx = p.x - pointer.x;
+        const dy = p.y - pointer.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < REPEL_RADIUS && dist > 0) {
+          const force = (1 - dist / REPEL_RADIUS) * 0.6;
+          p.vx += (dx / dist) * force;
+          p.vy += (dy / dist) * force;
         }
+        p.vx *= 0.92;
+        p.vy *= 0.92;
 
-        // Draw a glowing green dot
+        p.y += -p.speedY + p.vy;
+        p.x += p.drift + p.vx;
+
+        // Wrap around the edges
+        if (p.y < 0) {
+          p.y = height;
+          p.x = Math.random() * width;
+        }
+        if (p.x < -10) p.x = width + 10;
+        if (p.x > width + 10) p.x = -10;
+
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(0, 255, 102, ${p.alpha})`;
-        ctx.shadowColor = "#00ff66";
-        ctx.shadowBlur = 8;
         ctx.fill();
       });
-
-      // ---- Loop this function forever, in sync with the browser's refresh rate ----
-      requestAnimationFrame(drawParticles);
     }
 
-    drawParticles();
+    // ---- Animation loop; pauses when the tab is hidden ----
+    let rafId = null;
+    function loop() {
+      drawParticles();
+      rafId = requestAnimationFrame(loop);
+    }
+    function start() { if (rafId === null && !reduceMotion) loop(); }
+    function stop() { if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; } }
+
+    document.addEventListener("visibilitychange", () => {
+      document.hidden ? stop() : start();
+    });
+
+    // Reduced motion: draw one still frame instead of animating
+    if (reduceMotion) drawParticles(); else start();
   </script>
 
 </body>
