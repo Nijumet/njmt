@@ -1,356 +1,319 @@
 <!DOCTYPE html>
-
 <html lang="en">
-
 <head>
-
 <meta charset="UTF-8">
-
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Word Fill</title>
-
 <style>
-
   body {
-
     margin: 0;
-
     background: #f2f2f2;
-
     font-family: Arial, sans-serif;
-
     display: flex;
-
     flex-direction: column;
-
     height: 100vh;
-
   }
-
-
 
   #chat {
-
     flex: 1;
-
     padding: 15px;
-
     overflow-y: auto;
-
     display: flex;
-
     flex-direction: column;
-
     gap: 12px;
-
   }
-
-
 
   .bot, .user {
-
     max-width: 75%;
-
     padding: 10px 14px;
-
     border-radius: 14px;
-
     line-height: 1.4;
-
     white-space: pre-wrap;
-
   }
-
-
 
   .bot {
-
     background: #ffffff;
-
     align-self: flex-start;
-
     border: 1px solid #ddd;
-
   }
-
-
 
   .user {
-
     background: #d1ffd1;
-
     align-self: flex-end;
-
     border: 1px solid #9adf9a;
-
   }
-
-
 
   #inputBar {
-
     display: flex;
-
     padding: 10px;
-
     background: #fff;
-
     border-top: 1px solid #ccc;
-
   }
-
-
 
   #inputBar input {
-
     flex: 1;
-
     padding: 10px;
-
     border-radius: 8px;
-
     border: 1px solid #aaa;
-
     font-size: 16px;
-
   }
-
-
 
   #inputBar button {
-
     margin-left: 10px;
-
     padding: 10px 16px;
-
     border: none;
-
     border-radius: 8px;
-
     background: #4CAF50;
-
     color: white;
-
     font-size: 16px;
-
     cursor: pointer;
-
   }
-
-
 
   #inputBar button:hover {
-
     background: #45a049;
-
   }
-
 </style>
-
 </head>
-
 <body>
-
-
 
 <div id="chat"></div>
 
-
-
 <div id="inputBar">
-
   <input id="userInput" placeholder="Type here...">
-
   <button onclick="submitInput()">Send</button>
-
 </div>
 
-
-
 <script>
-
 const chat = document.getElementById("chat");
-
 const input = document.getElementById("userInput");
 
-
-
-// Words needed for the story
-
-const prompts = [
-
-  "Give me a person's name.",
-
-  "Give me an adjective.",
-
-  "Name an animal.",
-
-  "Give me a verb (past tense).",
-
-  "Name a place.",
-
-  "Give me a plural noun.",
-
-  "Name a food.",
-
-  "Give me another adjective.",
-
-  "Name an object.",
-
-  "Give me an emotion."
-
-];
-
-
-
-let answers = [];
-
-let step = 0;
-
-
-
-// Add a message to the chat
-
-function addMessage(text, sender) {
-
-  const div = document.createElement("div");
-
-  div.className = sender;
-
-  div.textContent = text;
-
-  chat.appendChild(div);
-
-  chat.scrollTop = chat.scrollHeight;
-
-}
-
-
-
-// Start the conversation
-
-addMessage("Hi! Let's play Mad Libs. I'll ask you for some words.", "bot");
-
-setTimeout(() => addMessage(prompts[step], "bot"), 600);
-
-
-
-// Handle user input
-
-function submitInput() {
-
-  const text = input.value.trim();
-
-  if (!text) return;
-
-
-
-  addMessage(text, "user");
-
-  answers.push(text);
-
-  input.value = "";
-
-
-
-  step++;
-
-
-
-  if (step < prompts.length) {
-
-    setTimeout(() => addMessage(prompts[step], "bot"), 500);
-
-  } else {
-
-    setTimeout(showStory, 600);
-
-  }
-
-}
-
-
-
-// Build and show the final story
-
-function showStory() {
-
-  const [
-
-    name, adj, animal, verbPast, place,
-
-    plural, food, adj2, object, emotion
-
-  ] = answers;
-
-
-
-  const story =
-
-`${name} woke up feeling unusually ${adj}. It wasn’t the normal kind of ${adj}, either — 
-
-it was the kind that made birds stare, clouds whisper, and the neighbor’s ${animal} 
-
-slowly back away while maintaining eye contact.
-
-
-
-After stretching dramatically for no reason, ${name} decided to visit the ${place}. 
-
-On the way there, a mysterious ${animal} wearing sunglasses suddenly ${verbPast} 
-
-right in the middle of the sidewalk.
-
-
-
-Inside the ${place}, things only got stranger. A group of tourists were loudly 
-
-arguing about the proper way to juggle ${plural}. Someone was selling “artisanal 
-
-handcrafted ${food}” for $87 a slice.
-
-
-
-Feeling ${emotion}, ${name} wandered deeper until discovering a hidden door behind 
-
-a vending machine. Inside was a neon-lit hallway leading to a throne made entirely 
-
-of ${plural}. Sitting on it was the same sunglasses-wearing ${animal}.
-
-
+// Each story has a title, its own list of prompts, and a build function.
+// The build function receives the answers array in the same order as the prompts.
+const stories = [
+
+  {
+    title: "The Realm of Eternal Whatever",
+    prompts: [
+      "Give me a person's name.",
+      "Give me an adjective.",
+      "Name an animal.",
+      "Give me a verb (past tense).",
+      "Name a place.",
+      "Give me a plural noun.",
+      "Name a food.",
+      "Give me another adjective.",
+      "Name an object.",
+      "Give me an emotion."
+    ],
+    build: (a) => {
+      const [name, adj, animal, verbPast, place, plural, food, adj2, object, emotion] = a;
+      return `${name} woke up feeling unusually ${adj}. It wasn’t the normal kind of ${adj}, either — it was the kind that made birds stare, clouds whisper, and the neighbor’s ${animal} slowly back away while maintaining eye contact.
+
+After stretching dramatically for no reason, ${name} decided to visit the ${place}. On the way there, a mysterious ${animal} wearing sunglasses suddenly ${verbPast} right in the middle of the sidewalk.
+
+Inside the ${place}, things only got stranger. A group of tourists were loudly arguing about the proper way to juggle ${plural}. Someone was selling “artisanal handcrafted ${food}” for $87 a slice.
+
+Feeling ${emotion}, ${name} wandered deeper until discovering a hidden door behind a vending machine. Inside was a neon-lit hallway leading to a throne made entirely of ${plural}. Sitting on it was the same sunglasses-wearing ${animal}.
 
 The creature declared:
-
   “BEHOLD, ${name}! You are now ruler of the ${adj2} Realm of Eternal ${plural}!”
-
-
 
 A crown made of ${food} was placed on ${name}'s head. It was warm. Uncomfortably warm.
 
-
-
-From that day forward, ${name} ruled with wisdom, grace, and a strict 
-
-no-running-near-the-pool policy. Citizens celebrated by dressing as giant ${object}s 
-
-and dancing in the streets.
-
-
+From that day forward, ${name} ruled with wisdom, grace, and a strict no-running-near-the-pool policy. Citizens celebrated by dressing as giant ${object}s and dancing in the streets.
 
 It was, without question, the most ${adj} adventure ever.`;
+    }
+  },
 
+  {
+    title: "The Haunted Space Diner",
+    prompts: [
+      "Give me a person's name.",
+      "Name a planet or made-up place.",
+      "Give me an adjective.",
+      "Name a food.",
+      "Give me a verb ending in -ing.",
+      "Name a body part.",
+      "Give me a plural noun.",
+      "Give me a number.",
+      "Give me a silly sound.",
+      "Name an animal."
+    ],
+    build: (a) => {
+      const [name, place, adj, food, verbIng, bodyPart, plural, number, sound, animal] = a;
+      return `Captain ${name} had been flying for ${number} days when the ship’s fuel gauge began to ${sound}. The only place in range was a tiny diner floating above ${place}, glowing with a ${adj} green light.
 
+The sign out front read: “GRANDMA ZORP’S — OPEN ALWAYS, ESPECIALLY WHEN YOU’D PREFER IT WASN’T.”
 
-  addMessage("All done! Here's your story:", "bot");
+Inside, the waiter was a ghost ${animal} who spoke only while ${verbIng}. “Welcome,” it hissed. “Today’s special is ${food} with a side of ${plural}.”
 
-  setTimeout(() => addMessage(story, "bot"), 500);
+${name} ordered it anyway. The ${food} arrived floating six inches above the plate, and then it looked directly at ${name}’s ${bodyPart}. Every ${bodyPart} in the diner turned to look as well.
 
+It turned out the diner was cursed. Anyone who finished their meal would be forced to work the night shift forever, wiping tables and polishing ${plural}.
+
+Thinking fast, ${name} fed the ${food} to the ghost ${animal}, who gave a satisfied “${sound}” and vanished in a puff of glitter. The curse broke. The lights went out. The fuel gauge finally read full.
+
+${name} left a ${number}-star review: “${adj} atmosphere, would haunt again.”`;
+    }
+  },
+
+  {
+    title: "The Case of the Missing Sandwich",
+    prompts: [
+      "Give me a person's name.",
+      "Name a food (the sandwich filling).",
+      "Name a place.",
+      "Give me an adjective.",
+      "Give me a verb (past tense).",
+      "Name a job or occupation.",
+      "Name an object.",
+      "Give me an emotion.",
+      "Give me a plural noun.",
+      "Name an animal."
+    ],
+    build: (a) => {
+      const [name, food, place, adj, verbPast, job, object, emotion, plural, animal] = a;
+      return `Detective ${name} had solved 40 cases without breaking a sweat. But this morning, someone had stolen the ${adj} ${food} sandwich from the office fridge, and the whole ${place} was in a panic.
+
+“Nobody leaves,” said ${name}, adjusting a trench coat that was two sizes too ${adj}. “One of you is a sandwich thief.”
+
+The suspects were lined up:
+• A nervous ${job} who kept staring at a ${object}.
+• A ${emotion} intern who had crumbs on their sleeve.
+• A suspiciously calm ${animal} who had somehow gotten a security badge.
+
+${name} paced back and forth. Then, suddenly, the lights flickered and the ${object} ${verbPast} across the room!
+
+“Aha!” cried ${name}. “Only someone who loves ${plural} more than anything would risk it all for a ${food} sandwich!”
+
+All eyes turned to the ${animal}, who slowly pulled the sandwich out of a tiny briefcase and whispered, “It was lonely in there.”
+
+Case closed. The ${animal} was given a stern warning, a new sandwich, and a promotion to ${job}.`;
+    }
+  },
+
+  {
+    title: "Wizard School Disaster",
+    prompts: [
+      "Give me a person's name.",
+      "Give me a made-up magic word.",
+      "Name an animal.",
+      "Give me an adjective.",
+      "Name an object.",
+      "Give me a verb (past tense).",
+      "Give me a plural noun.",
+      "Name a place.",
+      "Name a color.",
+      "Name a food."
+    ],
+    build: (a) => {
+      const [name, spell, animal, adj, object, verbPast, plural, place, color, food] = a;
+      return `On the first day of Wizard School, ${name} was handed a ${adj} wand, a ${color} robe, and a warning: “Whatever you do, don’t say ${spell} out loud.”
+
+Naturally, ${name} said it out loud.
+
+“${spell.toUpperCase()}!”
+
+The classroom shook. Every ${object} in the room ${verbPast} into the air, and the headmaster’s pet ${animal} began speaking fluent Latin and demanding ${food}.
+
+“This is a disaster,” said the headmaster, who was now ${color} from head to toe. “We need a hero to fix this.”
+
+${name} bravely volunteered, mostly because everyone else had run away. Armed with a spellbook, a bag of ${plural}, and a questionable amount of confidence, ${name} set off for the ${place} to find the only cure: the legendary Wand of Undoing.
+
+It took three days, two riddles, and one very confusing duel against a ${adj} ${animal}, but ${name} finally returned and reversed the spell.
+
+For saving the school, ${name} was awarded a golden ${object} and permanent detention in the ${place}. Honestly, it was worth it.`;
+    }
+  },
+
+  {
+    title: "Chef Showdown Supreme",
+    prompts: [
+      "Give me a person's name.",
+      "Name a food.",
+      "Give me another food.",
+      "Give me an adjective.",
+      "Give me a verb (past tense).",
+      "Name a body part.",
+      "Give me a number.",
+      "Name a place.",
+      "Name an animal.",
+      "Give me a plural noun."
+    ],
+    build: (a) => {
+      const [name, food, food2, adj, verbPast, bodyPart, number, place, animal, plural] = a;
+      return `Welcome to CHEF SHOWDOWN SUPREME, broadcasting live from the ${adj} kitchens of ${place}!
+
+Tonight’s contestant is ${name}, who has exactly ${number} minutes to create a masterpiece using only ${food}, ${food2}, and a mysterious basket of ${plural}.
+
+“I’ve never been more ready,” whispered ${name}, who had never been less ready.
+
+The timer started. ${name} chopped, whisked, and flambéed with wild energy. At one point the ${food} ${verbPast} off the counter and had to be chased across the studio by a camera operator and a confused ${animal}.
+
+With seconds to spare, ${name} burned a ${bodyPart}, spilled ${food2} on the head judge’s shoes, and finally plated the dish: ${food}-stuffed ${food2} with a ${adj} glaze.
+
+The judges tasted it in silence. Finally, the head judge spoke:
+
+“This is the most ${adj} thing I have ever eaten. My ${bodyPart} is tingling. I give it a perfect ten.”
+
+${name} won the grand prize: a lifetime supply of ${plural} and a trophy shaped like a ${animal}.`;
+    }
+  }
+
+];
+
+// Pick one random story on each load
+const story = stories[Math.floor(Math.random() * stories.length)];
+const prompts = story.prompts;
+
+let answers = [];
+let step = 0;
+
+// Add a message to the chat
+function addMessage(text, sender) {
+  const div = document.createElement("div");
+  div.className = sender;
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
 }
 
+// Start the conversation
+addMessage("Hi! Let's play Mad Libs. I'll ask you for some words.", "bot");
+setTimeout(() => addMessage(prompts[step], "bot"), 600);
+
+// Handle user input
+function submitInput() {
+  if (step >= prompts.length) return;
+
+  const text = input.value.trim();
+  if (!text) return;
+
+  addMessage(text, "user");
+  answers.push(text);
+  input.value = "";
+
+  step++;
+
+  if (step < prompts.length) {
+    setTimeout(() => addMessage(prompts[step], "bot"), 500);
+  } else {
+    setTimeout(showStory, 600);
+  }
+}
+
+// Build and show the final story
+function showStory() {
+  addMessage("All done! Here's your story:\n\n" + story.title.toUpperCase(), "bot");
+  setTimeout(() => addMessage(story.build(answers), "bot"), 500);
+}
+
+// Press Enter to send
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") submitInput();
+});
 </script>
 
-
-
 </body>
-
 </html>
-
