@@ -4,28 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blaster Duel | Elite Arena</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700;900&family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        display: ['Outfit', 'sans-serif'],
-                        body: ['Space Grotesk', 'sans-serif'],
-                    },
-                    colors: {
-                        p1: '#00f2ff',
-                        p2: '#ff00c8',
-                        arena: '#1a1a24',
-                        bg: '#0a0a0f',
-                    }
-                }
-            }
-        }
-    </script>
     <style>
         body {
             margin: 0;
@@ -68,6 +49,26 @@
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 16px;
+        }
+
+        .score-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            opacity: 0.5;
+        }
+
+        .divider-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .divider {
+            height: 2rem;
+            width: 1px;
+            background: rgba(255, 255, 255, 0.2);
         }
 
         .scoreboard {
@@ -168,6 +169,18 @@
             border-bottom: 2px solid rgba(255, 255, 255, 0.2);
         }
 
+        #level-name {
+            position: absolute;
+            top: 112px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 11px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.45);
+        }
+
         canvas {
             display: block;
             width: 100%;
@@ -183,17 +196,19 @@
         <div id="ui-layer">
             <div class="scoreboard glass-panel">
                 <div class="score-box">
-                    <span class="text-[10px] uppercase tracking-widest opacity-50">Player 1</span>
+                    <span class="score-label">Player 1</span>
                     <div class="p1-score" id="p1-score">0</div>
                 </div>
-                <div class="flex flex-col items-center justify-center">
-                    <div class="h-8 w-[1px] bg-white/20"></div>
+                <div class="divider-wrap">
+                    <div class="divider"></div>
                 </div>
                 <div class="score-box">
-                    <span class="text-[10px] uppercase tracking-widest opacity-50">Player 2</span>
+                    <span class="score-label">Player 2</span>
                     <div class="p2-score" id="p2-score">0</div>
                 </div>
             </div>
+
+            <div id="level-name"></div>
 
             <div id="center-text"></div>
             
@@ -213,6 +228,7 @@
     const p1ScoreEl = document.getElementById('p1-score');
     const p2ScoreEl = document.getElementById('p2-score');
     const restartBtn = document.getElementById('btn-restart');
+    const levelNameEl = document.getElementById('level-name');
 
     // Game Constants
     const MAX_SCORE = 5;
@@ -239,14 +255,209 @@
     let bullets = [];
     let particles = [];
 
-    const platforms = [
-        { x: 0, y: 550, w: 800, h: 50, type: 'solid' }, // Ground
-        { x: -50, y: 0, w: 50, h: 600, type: 'solid' }, // Left Wall
-        { x: 800, y: 0, w: 50, h: 600, type: 'solid' }, // Right Wall
-        { x: 120, y: 400, w: 160, h: 12, type: 'jump-through' },
-        { x: 520, y: 400, w: 160, h: 12, type: 'jump-through' },
-        { x: 280, y: 250, w: 240, h: 12, type: 'jump-through' }
+    // ---------------------------------------------------------------
+    // LEVELS
+    // Every level is described for the LEFT half only; buildLevel()
+    // mirrors it across x = 400, so layouts are symmetrical by construction.
+    //   plats : { x, y, w, move?, spikes? }   x:'c' = centered on the arena
+    //     move   : { axis:'x'|'y', range, speed, phase }  (mirrored automatically)
+    //     spikes : [{ ox, w }] offset along the platform; ox:'c' = centered
+    //   floor : [{ x, w }] spikes on the ground; x:'c' = centered
+    // Centered platforms may only move on the y axis (keeps them symmetrical).
+    // ---------------------------------------------------------------
+    const W = 800;
+    const GROUND_Y = 550;
+    const SPIKE_H = 14;
+
+    const LEVELS = [
+        { name: 'Classic Arena',
+          plats: [
+            { x: 120, y: 400, w: 160 },
+            { x: 'c', y: 250, w: 240 }
+          ] },
+
+        { name: 'Spike Pit',
+          plats: [
+            { x: 120, y: 400, w: 160 },
+            { x: 'c', y: 250, w: 240 }
+          ],
+          floor: [ { x: 'c', w: 120 } ] },
+
+        { name: 'Twin Peaks',
+          plats: [
+            { x: 60, y: 420, w: 140 },
+            { x: 'c', y: 330, w: 200 },
+            { x: 150, y: 230, w: 120 }
+          ],
+          floor: [ { x: 230, w: 70 } ] },
+
+        { name: 'Needle Bridges',
+          plats: [
+            { x: 90, y: 420, w: 180, spikes: [ { ox: 70, w: 40 } ] },
+            { x: 'c', y: 300, w: 240, spikes: [ { ox: 'c', w: 60 } ] },
+            { x: 200, y: 190, w: 110 }
+          ] },
+
+        { name: 'Elevators',
+          plats: [
+            { x: 90, y: 400, w: 150, move: { axis: 'y', range: 70, speed: 0.022, phase: 0 } },
+            { x: 250, y: 330, w: 90, move: { axis: 'y', range: 50, speed: 0.03, phase: 1.5 } },
+            { x: 'c', y: 230, w: 200 }
+          ] },
+
+        { name: 'Shuttles',
+          plats: [
+            { x: 110, y: 430, w: 140, move: { axis: 'x', range: 60, speed: 0.02, phase: 0 } },
+            { x: 150, y: 210, w: 120, move: { axis: 'x', range: 50, speed: 0.018, phase: 2 } },
+            { x: 'c', y: 320, w: 160, move: { axis: 'y', range: 50, speed: 0.025, phase: 0 } }
+          ] },
+
+        { name: 'Spiked Lifts',
+          plats: [
+            { x: 80, y: 420, w: 160, move: { axis: 'y', range: 60, speed: 0.02, phase: 0 },
+              spikes: [ { ox: 60, w: 40 } ] },
+            { x: 'c', y: 280, w: 220, move: { axis: 'y', range: 40, speed: 0.03, phase: 1 } }
+          ],
+          floor: [ { x: 'c', w: 100 } ] },
+
+        { name: 'Spike Floor Shuttle',
+          plats: [
+            { x: 160, y: 440, w: 120, move: { axis: 'x', range: 70, speed: 0.018, phase: 0 } },
+            { x: 240, y: 230, w: 110 },
+            { x: 'c', y: 340, w: 140, move: { axis: 'y', range: 60, speed: 0.025, phase: 0 } }
+          ],
+          floor: [ { x: 170, w: 230 } ] },
+
+        { name: 'Gauntlet',
+          plats: [
+            { x: 70, y: 430, w: 130, move: { axis: 'y', range: 50, speed: 0.02, phase: 0 } },
+            { x: 230, y: 340, w: 110, spikes: [ { ox: 35, w: 40 } ] },
+            { x: 'c', y: 240, w: 160, move: { axis: 'y', range: 30, speed: 0.03, phase: 0 },
+              spikes: [ { ox: 'c', w: 50 } ] }
+          ],
+          floor: [ { x: 'c', w: 80 }, { x: 250, w: 50 } ] },
+
+        { name: 'Crossfire',
+          plats: [
+            { x: 110, y: 440, w: 150, move: { axis: 'x', range: 60, speed: 0.02, phase: 0 },
+              spikes: [ { ox: 55, w: 40 } ] },
+            { x: 200, y: 300, w: 110, move: { axis: 'y', range: 40, speed: 0.028, phase: 1 } },
+            { x: 'c', y: 210, w: 140 }
+          ],
+          floor: [ { x: 'c', w: 160 } ] }
     ];
+
+    let platforms = [];
+    let spikes = [];
+    let levelTime = 0;
+    let roundNumber = 0;
+
+    function buildLevel(index) {
+        const spec = LEVELS[index];
+        platforms = [
+            { x: 0, y: GROUND_Y, w: W, h: 50, type: 'solid' }, // Ground
+            { x: -50, y: 0, w: 50, h: 600, type: 'solid' },    // Left Wall
+            { x: W, y: 0, w: 50, h: 600, type: 'solid' }       // Right Wall
+        ];
+        spikes = [];
+        levelTime = 0;
+
+        const makePlat = (x, item, dir) => {
+            const p = { x, y: item.y, w: item.w, h: 12, type: 'jump-through',
+                        baseX: x, baseY: item.y, dx: 0, dy: 0, move: null };
+            if (item.move) {
+                p.move = {
+                    axis: item.move.axis,
+                    range: item.move.range,
+                    speed: item.move.speed,
+                    phase: item.move.phase || 0,
+                    dir: item.move.axis === 'x' ? dir : 1 // x-axis motion is mirrored
+                };
+            }
+            platforms.push(p);
+            return p;
+        };
+        const addPlatSpike = (parent, ox, w) => {
+            spikes.push({ parent, ox, w, h: SPIKE_H, x: parent.x + ox, y: parent.y - SPIKE_H });
+        };
+        const addFloorSpike = (x, w) => {
+            spikes.push({ parent: null, ox: 0, w, h: SPIKE_H, x, y: GROUND_Y - SPIKE_H });
+        };
+
+        spec.plats.forEach(item => {
+            if (item.x === 'c') {
+                const p = makePlat((W - item.w) / 2, item, 1);
+                (item.spikes || []).forEach(s => {
+                    if (s.ox === 'c') addPlatSpike(p, (item.w - s.w) / 2, s.w);
+                    else {
+                        addPlatSpike(p, s.ox, s.w);
+                        addPlatSpike(p, item.w - s.ox - s.w, s.w);
+                    }
+                });
+            } else {
+                const L = makePlat(item.x, item, 1);
+                const R = makePlat(W - item.x - item.w, item, -1);
+                (item.spikes || []).forEach(s => {
+                    addPlatSpike(L, s.ox, s.w);
+                    addPlatSpike(R, item.w - s.ox - s.w, s.w);
+                });
+            }
+        });
+
+        (spec.floor || []).forEach(s => {
+            if (s.x === 'c') addFloorSpike((W - s.w) / 2, s.w);
+            else {
+                addFloorSpike(s.x, s.w);
+                addFloorSpike(W - s.x - s.w, s.w);
+            }
+        });
+    }
+
+    function updateMovers() {
+        levelTime++;
+        platforms.forEach(p => {
+            if (!p.move) { p.dx = 0; p.dy = 0; return; }
+            const o = Math.sin(levelTime * p.move.speed + p.move.phase) * p.move.range;
+            const nx = p.baseX + (p.move.axis === 'x' ? o * p.move.dir : 0);
+            const ny = p.baseY + (p.move.axis === 'y' ? o : 0);
+            p.dx = nx - p.x;
+            p.dy = ny - p.y;
+            p.x = nx;
+            p.y = ny;
+        });
+        spikes.forEach(s => {
+            if (s.parent) {
+                s.x = s.parent.x + s.ox;
+                s.y = s.parent.y - s.h;
+            }
+        });
+    }
+
+    function spikeBox(s) {
+        return { x: s.x + 3, y: s.y + 4, w: s.w - 6, h: s.h - 4 };
+    }
+
+    function playerBox(p) {
+        return { x: p.x + 4, y: p.y + 6, w: p.w - 8, h: p.h - 6 };
+    }
+
+    function checkSpikes() {
+        if (gameState !== 'PLAYING') return;
+        const victims = players.filter(p => !p.dead && spikes.some(s => isAABB(playerBox(p), spikeBox(s))));
+        if (victims.length === 2) {
+            // Both touch spikes on the same frame: draw, nobody scores
+            victims.forEach(v => {
+                v.dead = true;
+                spawnParticles(v.x + v.w/2, v.y + v.h/2, v.color, 30, 8, 'spark');
+            });
+            screenShake = 15;
+            gameState = 'ROUND_OVER';
+            stateTimer = 120;
+            showCenterText('DRAW');
+        } else if (victims.length === 1) {
+            handleHit(victims[0].id);
+        }
+    }
 
     class Particle {
         constructor(x, y, color, speed, type) {
@@ -351,6 +562,7 @@
 
             this.grounded = false;
             this.wasGrounded = false;
+            this.standingOn = null;
             this.dead = false;
             this.canShoot = true;
             this.shootCooldown = 0;
@@ -363,6 +575,12 @@
                 this.y += this.vy;
                 this.handlePlatformCollisions();
                 return;
+            }
+
+            // Ride moving platforms
+            if (this.standingOn) {
+                this.x += this.standingOn.dx;
+                this.y += this.standingOn.dy;
             }
 
             // Input
@@ -427,6 +645,7 @@
 
         handlePlatformCollisions(axis) {
             this.grounded = false;
+            if (axis !== 'x') this.standingOn = null;
             platforms.forEach(p => {
                 if (p.type === 'solid') {
                     if (isAABB(this, p)) {
@@ -454,6 +673,7 @@
                                 this.y = p.y - this.h;
                                 this.vy = 0;
                                 this.grounded = true;
+                                this.standingOn = p;
                             }
                         }
                     }
@@ -505,6 +725,7 @@
     }
 
     function handleHit(hitId) {
+        if (gameState === 'GAME_OVER') return;
         const victim = players.find(p => p.id === hitId);
         const killer = players.find(p => p.id !== hitId);
         
@@ -539,6 +760,7 @@
     function initGame() {
         p1Score = 0;
         p2Score = 0;
+        roundNumber = 0;
         updateScoreUI();
         restartBtn.style.display = 'none';
         startRound();
@@ -547,9 +769,13 @@
     function startRound() {
         bullets = [];
         particles = [];
+        const levelIndex = roundNumber % LEVELS.length;
+        buildLevel(levelIndex);
+        levelNameEl.innerText = 'Round ' + (roundNumber + 1) + ' \u00b7 ' + LEVELS[levelIndex].name;
+        roundNumber++;
         players = [
-            new Player(1, 100, 400, P1_COLOR, { left: 'KeyA', right: 'KeyD', jump: 'KeyW', shoot: 'KeyS' }, 1),
-            new Player(2, 670, 400, P2_COLOR, { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', shoot: 'ArrowDown' }, -1)
+            new Player(1, 100, GROUND_Y - 44, P1_COLOR, { left: 'KeyA', right: 'KeyD', jump: 'KeyW', shoot: 'KeyS' }, 1),
+            new Player(2, W - 100 - 30, GROUND_Y - 44, P2_COLOR, { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', shoot: 'ArrowDown' }, -1)
         ];
         
         gameState = 'COUNTDOWN';
@@ -586,7 +812,7 @@
         } else if (gameState === 'ROUND_OVER') {
             stateTimer--;
             if (stateTimer <= 0) {
-                if (p1Score >= MAX_SCORE || p2Score >= MAX_SCORE) {
+                if ((p1Score >= MAX_SCORE || p2Score >= MAX_SCORE) && p1Score !== p2Score) {
                     gameState = 'GAME_OVER';
                     const winner = p1Score >= MAX_SCORE ? "PLAYER 1" : "PLAYER 2";
                     const winCol = p1Score >= MAX_SCORE ? P1_COLOR : P2_COLOR;
@@ -598,7 +824,9 @@
             }
         }
 
+        updateMovers();
         players.forEach(p => p.update());
+        checkSpikes();
         bullets.forEach(b => b.update());
         bullets = bullets.filter(b => !b.markedForDeletion);
         particles.forEach(p => p.update());
@@ -657,10 +885,28 @@
                 gradient.addColorStop(1, 'rgba(255,255,255,0.05)');
                 ctx.fillStyle = gradient;
                 ctx.fillRect(p.x, p.y, p.w, p.h);
-                ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                ctx.fillStyle = p.move ? 'rgba(255,214,0,0.75)' : 'rgba(255,255,255,0.4)';
                 ctx.fillRect(p.x, p.y, p.w, 2);
             }
         });
+
+        // Spikes
+        ctx.fillStyle = '#ff2d55';
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#ff2d55';
+        spikes.forEach(s => {
+            const n = Math.max(1, Math.round(s.w / 14));
+            const tw = s.w / n;
+            for (let i = 0; i < n; i++) {
+                ctx.beginPath();
+                ctx.moveTo(s.x + i * tw, s.y + s.h);
+                ctx.lineTo(s.x + (i + 0.5) * tw, s.y);
+                ctx.lineTo(s.x + (i + 1) * tw, s.y + s.h);
+                ctx.closePath();
+                ctx.fill();
+            }
+        });
+        ctx.shadowBlur = 0;
 
         particles.forEach(p => p.draw(ctx));
         bullets.forEach(b => b.draw(ctx));
