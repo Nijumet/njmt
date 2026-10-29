@@ -102,6 +102,22 @@
     transform: translateY(0) scale(0.98);
   }
 
+  /* ---- UPDATED / NEW tags: orange and larger than the label ---- */
+  .neon-button .tag {
+    color: #ff8c1a;
+    font-size: 1.45em;
+    font-weight: bold;
+    line-height: 1;
+    margin-left: 0.35em;
+    text-shadow: 0 0 6px #ff8c1a;
+  }
+
+  .neon-button:hover .tag,
+  .neon-button:focus-visible .tag {
+    color: #e65c00;
+    text-shadow: none;
+  }
+
   /* ---- Particle canvas ---- */
   #particles {
     position: fixed;
@@ -189,7 +205,21 @@
       const link = document.createElement("a");
       link.className = "neon-button";
       link.href = btn.url;
-      link.textContent = btn.label;
+
+      // Wrap label in one inline span so spacing survives the flex layout,
+      // and pick out the all-caps words UPDATED / NEW as styled tags.
+      const label = document.createElement("span");
+      btn.label.split(/\b(UPDATED|NEW)\b/).forEach(part => {
+        if (part === "UPDATED" || part === "NEW") {
+          const tag = document.createElement("span");
+          tag.className = "tag";
+          tag.textContent = part;
+          label.appendChild(tag);
+        } else if (part) {
+          label.appendChild(document.createTextNode(part));
+        }
+      });
+      link.appendChild(label);
       link.style.setProperty("--i", i);
       grid.appendChild(link);
     });
