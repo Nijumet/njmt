@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tug of War</title>
+<style>
+:root{--bg:#efe6d2;--ink:#3b2a20;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#2a2320;--ink:#f3e8d0;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#2a2320;--ink:#f3e8d0;color-scheme:dark}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;display:flex;align-items:center;justify-content:center}
+.wrap{position:relative;width:min(96vw,960px)}
+canvas{width:100%;height:auto;display:block;border:4px solid #3b2a20;border-radius:18px;background:#cfe8ea;touch-action:none}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(59,42,32,.5);border-radius:18px}
+.overlay[hidden]{display:none}
+.card{background:#fff3d6;color:#3b2a20;border:4px solid #3b2a20;border-radius:20px;padding:clamp(14px,3vw,28px) clamp(18px,4vw,38px);box-shadow:0 8px 0 #3b2a20;max-width:86%;text-align:center}
+h1{margin:0 0 8px;font-size:clamp(22px,5vw,44px);line-height:1.1}
+p{margin:6px 0;font-size:clamp(13px,2.2vw,19px);line-height:1.4}
+.chip{display:inline-block;min-width:1.4em;padding:1px 8px;margin:0 2px;background:#fffaf0;border:3px solid var(--c);border-radius:8px;box-shadow:0 3px 0 var(--c);font-weight:800}
+button{font:inherit;font-weight:800;font-size:clamp(16px,2.6vw,22px);padding:10px 28px;margin-top:12px;border:4px solid #3b2a20;border-radius:14px;background:#e8a93a;color:#3b2a20;cursor:pointer;box-shadow:0 5px 0 #3b2a20}
+button:active{transform:translateY(4px);box-shadow:0 1px 0 #3b2a20}
+button:focus-visible{outline:3px solid #3a7f9d;outline-offset:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<canvas id="c" width="960" height="540" aria-label="Four-player tug of war game"></canvas>
+<div class="overlay" id="startO"><div class="card">
+<h1>Four-Way Tug of War</h1>
+<p>Mash your key to drag the flag past your team’s post. First team to win 5 rounds takes the match.</p>
+<p><b>Left team:</b> Player 1 <span class="chip" style="--c:#d9644a">A</span> Player 2 <span class="chip" style="--c:#e5aa3a">V</span></p>
+<p><b>Right team:</b> Player 3 <span class="chip" style="--c:#3f9c8f">I</span> Player 4 <span class="chip" style="--c:#5d7fc4">L</span></p>
+<button id="startB">Start match</button>
+</div></div>
+<div class="overlay" id="winO" hidden><div class="card">
+<h1 id="wTitle"></h1>
+<p id="wNames"></p>
+<p id="wScore"></p>
+<button id="againB">Play again</button>
+</div></div>
+</div>
+<script>
+(() => {
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+const W = 960, H = 540, INK = '#3b2a20', GY = 400, ROPE_Y = GY - 84, REACH = 190, STEP = 0.05;
+const FONT = '"Trebuchet MS","Segoe UI",system-ui,sans-serif';
+const P = [
+  {name:'Tomato',    color:'#d9644a', dark:'#a8452f', label:'A',      codes:['KeyA'],             side:-1, off:-255, flash:0},
+  {name:'Mustard',   color:'#e5aa3a', dark:'#b27f1c', label:'V',      codes:['KeyV'],             side:-1, off:-135, flash:0},
+  {name:'Teal',      color:'#3f9c8f', dark:'#2b7268', label:'I',      codes:['KeyI'],             side: 1, off: 135, flash:0},
+  {name:'Blueberry', color:'#5d7fc4', dark:'#41609e', label:'L',         codes:['KeyL'], side: 1, off: 255, flash:0}
+];
+const keyMap = Object.create(null);
+P.forEach((p, i) => p.codes.forEach(c => keyMap[c] = i));
+
+let mode = 'title', pos = 0, shown = 0, count = 3, goT = 0, wSide = 0, t = 0;
+const wins = [0, 0], TARGET = 5;
+let matchDone = false;
+const down = new Set();
+
+const startO = document.getElementById('startO'), winO = document.getElementById('winO');
+const startB = document.getElementById('startB'), againB = document.getElementById('againB');
+
+function beginRound() {
+  if (matchDone) { wins[0] = 0; wins[1] = 0; matchDone = false; }
+  pos = 0; shown = 0; count = 3; goT = 0; mode = 'count';
+  P.forEach(p => p.flash = 0);
+  down.clear();
+  startO.hidden = true; winO.hidden = true;
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+}
+function pull(i) {
+  if (mode !== 'play') return;
+  pos = Math.max(-1, Math.min(1, pos + P[i].side * STEP));
+  P[i].flash = 1;
+  if (Math.abs(pos) >= 1) endRound(pos < 0 ? -1 : 1);
+}
+function endRound(side) {
+  mode = 'over'; wSide = side; wins[side < 0 ? 0 : 1]++;
+  setTimeout(showWin, 1100);
+}
+function showWin() {
+  if (mode !== 'over') return;
+  const left = wSide < 0;
+  matchDone = wins[left ? 0 : 1] >= TARGET;
+  document.getElementById('wTitle').textContent = (left ? 'Left' : 'Right') + (matchDone ? ' team wins the match!' : ' team wins the round!');
+  document.getElementById('wNames').textContent = left ? 'Red and Yellow (Players 1 and 2)' : 'Teal and Blue (Players 3 and 4)';
+  document.getElementById('wScore').textContent = 'Score: Left ' + wins[0] + ' – ' + wins[1] + ' Right (first to ' + TARGET + ')';
+  againB.textContent = matchDone ? 'New match' : 'Next round';
+  winO.hidden = false;
+  againB.focus();
+}
+startB.addEventListener('click', beginRound);
+againB.addEventListener('click', beginRound);
+
+/* Keyboard: count only fresh presses, ignore auto-repeat, clear state when focus is lost */
+addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const i = keyMap[e.code];
+  if (i === undefined) return;
+  e.preventDefault();
+  if (e.repeat || down.has(e.code)) return;
+  down.add(e.code);
+  pull(i);
+});
+addEventListener('keyup', e => {
+  if (keyMap[e.code] !== undefined) e.preventDefault();
+  down.delete(e.code);
+});
+addEventListener('blur', () => down.clear());
+document.addEventListener('visibilitychange', () => down.clear());
+
+/* Touch / mouse: tap below a player to pull for them */
+cv.addEventListener('pointerdown', e => {
+  const r = cv.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
+  if (y < H * 0.72) return;
+  let best = 0, bd = 1e9;
+  P.forEach((p, i) => { const d = Math.abs(x - (W / 2 + p.off)); if (d < bd) { bd = d; best = i; } });
+  pull(best);
+});
+
+/* ---------- drawing helpers ---------- */
+function fs(fill, lw) { g.fillStyle = fill; g.fill(); g.lineWidth = lw || 4; g.strokeStyle = INK; g.lineJoin = 'round'; g.stroke(); }
+function rr(x, y, w, h, r) {
+  g.beginPath(); g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+function ropeYat(x) {
+  const u = (x + 10) / (W + 20), a = ROPE_Y - 2, b = ROPE_Y + 10;
+  return (1 - u) * (1 - u) * a + 2 * u * (1 - u) * b + u * u * a;
+}
+function tf(px, py, th, lx, ly) {
+  const c = Math.cos(th), s = Math.sin(th);
+  return [px + lx * c - ly * s, py + lx * s + ly * c];
+}
+function cloud(x, y, s) {
+  const c = [[0, 0, 26], [26, -10, 32], [58, 0, 24], [28, 8, 26]];
+  g.lineWidth = 4; g.strokeStyle = INK;
+  c.forEach(([dx, dy, r]) => { g.beginPath(); g.arc(x + dx * s, y + dy * s, r * s, 0, 7); g.stroke(); });
+  g.fillStyle = '#fff8e8';
+  c.forEach(([dx, dy, r]) => { g.beginPath(); g.arc(x + dx * s, y + dy * s, r * s, 0, 7); g.fill(); });
+}
+
+function drawScene() {
+  const sky = g.createLinearGradient(0, 0, 0, 330);
+  sky.addColorStop(0, '#bfe0e6'); sky.addColorStop(1, '#f7ebc8');
+  g.fillStyle = sky; g.fillRect(0, 0, W, H);
+  cloud(((120 + t * 7) % (W + 220)) - 110, 110, 1);
+  cloud(((520 + t * 5) % (W + 220)) - 110, 80, 0.8);
+  cloud(((820 + t * 9) % (W + 220)) - 110, 150, 0.65);
+  g.beginPath(); g.ellipse(190, 335, 330, 100, 0, Math.PI, 2 * Math.PI); fs('#a9c98f', 4);
+  g.beginPath(); g.ellipse(740, 340, 360, 120, 0, Math.PI, 2 * Math.PI); fs('#97bb83', 4);
+  g.fillStyle = '#8fba68'; g.fillRect(0, 335, W, H - 335);
+  g.beginPath(); g.moveTo(0, 335); g.lineTo(W, 335); g.lineWidth = 4; g.strokeStyle = INK; g.stroke();
+  g.strokeStyle = '#6f9a4f'; g.lineWidth = 3; g.lineCap = 'round';
+  for (let i = 0; i < 22; i++) {
+    const x = (i * 83 + 30) % W, y = 350 + (i * 47) % 180;
+    g.beginPath(); g.moveTo(x - 6, y); g.lineTo(x - 9, y - 10); g.moveTo(x, y); g.lineTo(x, y - 13); g.moveTo(x + 6, y); g.lineTo(x + 9, y - 10); g.stroke();
+  }
+  g.beginPath(); g.ellipse(W / 2, GY + 4, 130, 17, 0, 0, 7); fs('#c5a273', 3);
+  g.setLineDash([8, 8]); g.strokeStyle = 'rgba(59,42,32,.4)'; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(W / 2, 250); g.lineTo(W / 2, GY - 10); g.stroke(); g.setLineDash([]);
+  [[-1, P[0].color], [1, P[2].color]].forEach(([s, col]) => {
+    const x = W / 2 + s * REACH;
+    g.lineCap = 'round'; g.strokeStyle = INK; g.lineWidth = 14; g.beginPath(); g.moveTo(x, GY + 6); g.lineTo(x, 225); g.stroke();
+    g.strokeStyle = col; g.lineWidth = 8; g.stroke();
+    rr(x - 28, 200, 56, 28, 8); fs(col, 4);
+    g.fillStyle = '#fff8e8'; g.font = '800 17px ' + FONT; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('WIN', x, 215);
+  });
+}
+
+function drawBody(p, i) {
+  const f = -p.side, over = mode === 'over', win = over && p.side === wSide, lose = over && !win;
+  let a = 8 + p.flash * 10;
+  if (lose) a = 30 + Math.sin(t * 10 + i) * 3;
+  if (win) a = 0;
+  const bob = win ? Math.abs(Math.sin(t * 9 + i)) * 16 : 0;
+  const px = W / 2 + p.off + shown * REACH, gy = GY - bob, th = -f * a * Math.PI / 180;
+  g.fillStyle = 'rgba(59,42,32,.2)'; g.beginPath(); g.ellipse(px, GY + 3, 40, 9, 0, 0, 7); g.fill();
+  g.save(); g.translate(px, gy); g.rotate(th); g.lineCap = 'round';
+  for (const s of [-1, 1]) {
+    g.strokeStyle = INK; g.lineWidth = 17; g.beginPath(); g.moveTo(s * 11, -40); g.lineTo(s * 15, -6); g.stroke();
+    g.strokeStyle = p.dark; g.lineWidth = 10; g.stroke();
+    g.beginPath(); g.ellipse(s * 15 + f * 5, -4, 15, 8, 0, 0, 7); fs('#5a3d2b', 3);
+  }
+  g.beginPath(); g.ellipse(0, -66, 31, 40, 0, 0, 7); fs(p.color);
+  g.fillStyle = 'rgba(255,243,214,.35)'; g.beginPath(); g.ellipse(f * 5, -58, 17, 22, 0, 0, 7); g.fill();
+  g.beginPath(); g.arc(0, -120, 27, 0, 7); fs('#f3cfa6');
+  g.beginPath(); g.arc(0, -120, 27, Math.PI, 2 * Math.PI); g.closePath(); fs(p.dark, 4);
+  g.beginPath(); g.arc(0, -149, 7, 0, 7); fs(p.color, 3);
+  for (const s of [-1, 1]) {
+    const ex = f * 5 + s * 9;
+    g.beginPath(); g.arc(ex, -113, 6, 0, 7); fs('#fff', 2.5);
+    g.fillStyle = INK; g.beginPath(); g.arc(ex + f * 2, -112, 3, 0, 7); g.fill();
+    g.fillStyle = 'rgba(217,100,74,.35)'; g.beginPath(); g.arc(ex + s * 6, -101, 5, 0, 7); g.fill();
+  }
+  const mx = f * 10, my = -100;
+  g.strokeStyle = INK; g.lineWidth = 3;
+  if (win) { g.beginPath(); g.arc(mx, my - 3, 8, 0.1 * Math.PI, 0.9 * Math.PI); g.stroke(); }
+  else if (p.flash > 0.25 || lose) { g.beginPath(); g.ellipse(mx, my + 2, 6, lose ? 8 : 5, 0, 0, 7); fs('#7a2f2a', 3); }
+  else { g.beginPath(); g.moveTo(mx - 5, my); g.lineTo(mx + 5, my); g.stroke(); }
+  g.restore();
+  return {px, gy, th, f};
+}
+
+function drawRope() {
+  const y = ROPE_Y; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(-10, y - 2); g.quadraticCurveTo(W / 2, y + 10, W + 10, y - 2);
+  g.strokeStyle = INK; g.lineWidth = 14; g.stroke();
+  g.strokeStyle = '#d2a766'; g.lineWidth = 8; g.stroke();
+  g.setLineDash([7, 9]); g.lineDashOffset = -shown * REACH; g.strokeStyle = '#a2763c'; g.stroke(); g.setLineDash([]);
+}
+function drawFlag() {
+  const fx = W / 2 + shown * REACH, ry = ropeYat(fx);
+  g.lineCap = 'round'; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.moveTo(fx, ry - 8); g.lineTo(fx, ry - 80); g.stroke();
+  g.strokeStyle = '#e9d8b4'; g.lineWidth = 3; g.stroke();
+  const w1 = Math.sin(t * 6) * 5, w2 = Math.sin(t * 6 + 1) * 5;
+  g.beginPath(); g.moveTo(fx, ry - 80); g.quadraticCurveTo(fx + 26, ry - 88 + w1, fx + 52, ry - 72);
+  g.quadraticCurveTo(fx + 26, ry - 64 + w2, fx, ry - 54); g.closePath(); fs('#f6e7b8', 4);
+  g.fillStyle = '#c4453a'; g.beginPath(); g.arc(fx + 18, ry - 68, 4.5, 0, 7); g.fill();
+  rr(fx - 10, ry - 13, 20, 26, 6); fs('#8a62a8', 4);
+}
+function drawArms(info) {
+  P.forEach((p, i) => {
+    const {px, gy, th, f} = info[i];
+    const [sx, sy] = tf(px, gy, th, f * 14, -88);
+    const hx = px + f * 46, hy = ropeYat(hx);
+    g.lineCap = 'round';
+    g.strokeStyle = INK; g.lineWidth = 15; g.beginPath(); g.moveTo(sx, sy); g.lineTo(hx, hy); g.stroke();
+    g.strokeStyle = p.dark; g.lineWidth = 9; g.stroke();
+    g.beginPath(); g.arc(hx, hy, 8, 0, 7); fs('#f3cfa6', 3);
+  });
+}
+function drawHud() {
+  rr(W / 2 - 80, 12, 160, 46, 23); fs('#fff3d6', 4);
+  g.fillStyle = INK; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '800 28px ' + FONT; g.fillText(wins[0] + '  –  ' + wins[1], W / 2, 36);
+  g.font = '800 20px ' + FONT;
+  g.textAlign = 'left'; g.fillText('Left team', 28, 36);
+  g.textAlign = 'right'; g.fillText('Right team', W - 28, 36);
+  P.forEach((p, i) => {
+    const x = W / 2 + p.off, w = Math.max(54, p.label.length * 12 + 26), press = p.flash > 0.5 ? 5 : 0;
+    g.fillStyle = INK; rr(x - w / 2, 452, w, 46, 10); g.fill();
+    rr(x - w / 2, 446 + press, w, 46, 10); fs(p.color, 4);
+    g.fillStyle = '#fff8e8'; g.strokeStyle = INK; g.lineWidth = 4; g.font = '800 22px ' + FONT; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.strokeText(p.label, x, 470 + press); g.fillText(p.label, x, 470 + press);
+    g.fillStyle = INK; g.font = '800 16px ' + FONT; g.fillText('Player ' + (i + 1), x, 516);
+  });
+}
+function bigText(s) {
+  g.font = '800 130px ' + FONT; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineJoin = 'round'; g.lineWidth = 14; g.strokeStyle = INK; g.strokeText(s, W / 2, 150);
+  g.fillStyle = '#fff3d6'; g.fillText(s, W / 2, 150);
+}
+
+function draw() {
+  drawScene();
+  const info = P.map(drawBody);
+  drawRope(); drawFlag(); drawArms(info); drawHud();
+  if (mode === 'count') bigText(String(Math.ceil(count)));
+  else if (mode === 'play' && goT > 0) bigText('GO!');
+}
+function update(dt) {
+  t += dt;
+  P.forEach(p => p.flash = Math.max(0, p.flash - dt * 5));
+  shown += (pos - shown) * Math.min(1, dt * 14);
+  if (mode === 'count') { count -= dt; if (count <= 0) { mode = 'play'; goT = 0.8; } }
+  if (goT > 0) goT -= dt;
+}
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  update(dt); draw(); requestAnimationFrame(frame);
+}
+startB.focus();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
