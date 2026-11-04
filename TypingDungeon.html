@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Typing Dungeon</title>
+<style>
+html,body{height:100%;margin:0;background:#0d0b14;font-family:ui-monospace,Menlo,Consolas,monospace}
+body{display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+canvas{max-width:100%;max-height:100%;aspect-ratio:4/3;background:#17131f;border:2px solid #3a2f55;border-radius:6px}
+</style></head><body>
+<canvas id="c" width="800" height="600"></canvas>
+<script>
+const W=800,H=600,cv=document.getElementById('c'),x=cv.getContext('2d');
+/* ================= EDIT ME ================= */
+// WORD LIST: separate words with spaces, commas or new lines. Any length (1+ letters).
+// Words are lowercased, non-letters are treated as separators, duplicates are removed.
+// Enemies start with the shortest words near START_LENGTH and move to longer ones as you win.
+const WORD_LIST=`
+cat bat sun key map orb axe elf bow gem murder murderer
+tomb bone claw doom fire grim hex iron jinx king lich mace nail oath pike quest rune sword torch urn vile wrath yarn zeal
+blade curse demon flame arson ghoul haunt ivory jewel knave lance moat noble omen plague quill relic shade tower unholy venom wield defenestration latibulation superfluous quintessential flummoxed sabotage decapitation ejection exile regicide
+dragon goblin hollow knight shadow temple wizard zombie shield dungeon armory beacon cursed dagger exiled falcon
+gauntlet crypts banshee citadel destiny eternal fortress gargoyle harvest incense
+labyrinth mystic necrotic phantom ravenous scepter vampire warlock catacomb darkness grimoire sorcerer treasure vanquish
+wraithlord nightmare skeleton gravedigger inquisitor bloodlust dragonfire shadowcast undertaker battlement chandelier witchcraft thunderous
+`;
+const CONFIG={
+  lives:10,           // hearts at the start
+  startLength:3,      // word length for the first enemies
+  killsPerLengthUp:3, // enemies defeated before words get 1 letter longer
+  maxLength:14        // longest word length requested
+};
+/* =========================================== */
+const WORDS=[...new Set(WORD_LIST.toLowerCase().split(/[^a-z]+/).filter(Boolean))];
+if(!WORDS.length)WORDS.push('empty','list');
+const byLen={};WORDS.forEach(w=>(byLen[w.length]=byLen[w.length]||[]).push(w));
+const LENS=Object.keys(byLen).map(Number).sort((a,b)=>a-b);
+const EMO=['💀','👻','🕷️','🧟','🐀'];
+let S,state='title',best=0,enemies=[],pops=[],slashes=[],parts=[],keysLast=0,swingT=0,shake=0,flash=0,last=performance.now(),tick=0;
+
+function newGame(){S={level:1,hp:CONFIG.lives,pen:0,score:0,total:0,combo:0};startLevel()}
+function startLevel(){
+  const b=S.level%5===0;
+  Object.assign(S,{isBoss:b,goal:b?2+S.level/5:6+S.level*2,kills:0,time:0,spawnT:b?4:1,target:null,lvlScore:0,freeze:0});
+  enemies=[];pops=[];slashes=[];parts=[];state='play';
+  if(b)enemies.push({x:400,y:90,word:pickWord(1),typed:0,lock:0,emoji:'🐉',boss:true,size:96,pm:2,bob:0});
+}
+function pickWord(off){
+  const want=Math.max(1,Math.min(CONFIG.maxLength,CONFIG.startLength+Math.floor(S.total/CONFIG.killsPerLengthUp))-S.pen+(off||0));
+  const L=LENS.filter(l=>l<=want).pop()||LENS[0];
+  const used=new Set(enemies.map(e=>e.word[0]));
+  let pool=(byLen[L]||[]).filter(w=>!used.has(w[0]));
+  if(!pool.length)pool=WORDS.filter(w=>!used.has(w[0])&&Math.abs(w.length-L)<=1);
+  if(!pool.length)pool=byLen[L];
+  return pool[Math.random()*pool.length|0];
+}
+function spawn(){
+  let px,tries=0;
+  do{px=90+Math.random()*620;tries++}while(tries<20&&enemies.some(e=>e.y<140&&Math.abs(e.x-px)<130));
+  const r=Math.random(),L=S.level;
+  let t={emoji:EMO[Math.random()*EMO.length|0],off:0,sm:1,pm:1,size:44,col:'#5a4a80'};
+  if(L>=2&&r<0.2)t={emoji:'🦇',off:-1,sm:1.7,pm:1.2,size:40,col:'#4aa8ff'};
+  else if(L>=3&&r<0.35)t={emoji:'👹',off:2,sm:0.6,pm:1.5,size:58,col:'#ff9a3c'};
+  const e=Object.assign({x:px,y:-20,typed:0,lock:0,bob:Math.random()*6},t);
+  e.word=pickWord(t.off);
+  if(Math.random()<0.08&&!enemies.some(n=>n.loot))e.loot=(S.hp<CONFIG.lives&&Math.random()<0.5)?'heart':'freeze';
+  enemies.push(e);
+}
+function update(dt){
+  tick+=dt;
+  if(state!=='play')return;
+  S.time+=dt;
+  const frozen=S.freeze>0;S.freeze=Math.max(0,S.freeze-dt);
+  const prog=S.kills/S.goal;
+  const speed=24+4*(S.level-1)+14*prog;
+  if(!frozen)S.spawnT-=dt;
+  if(S.isBoss){
+    if(S.spawnT<=0&&enemies.length<3&&S.kills<S.goal){spawn();S.spawnT=Math.max(3,5.5-S.level*0.1)}
+  }else{
+    const interval=Math.max(0.7,3.2-0.22*(S.level-1)-1.2*prog);
+    if(S.spawnT<=0&&S.kills+enemies.length<S.goal){spawn();S.spawnT=interval}
+  }
+  for(let i=enemies.length-1;i>=0;i--){
+    const e=enemies[i];
+    if(!frozen)e.y+=(e.boss?8+S.level*0.5:speed*(e.sm||1))*dt;
+    if(e.y>465){
+      S.hp--;S.pen++;S.combo=0;shake=0.35;flash=0.3;
+      if(e.boss)e.y=90;else{enemies.splice(i,1);if(S.target===e)S.target=null}
+      if(S.hp<=0){state='over';best=Math.max(best,S.score)}
+    }
+  }
+  swingT=Math.max(0,swingT-dt*3);shake=Math.max(0,shake-dt);flash=Math.max(0,flash-dt);
+  pops.forEach(p=>{p.t-=dt;p.y-=30*dt});pops=pops.filter(p=>p.t>0);
+  slashes.forEach(s=>s.t-=dt);slashes=slashes.filter(s=>s.t>0);
+  parts.forEach(p=>{p.t-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=300*dt});parts=parts.filter(p=>p.t>0);
+  if(S.kills>=S.goal&&enemies.length===0){
+    const par=S.isBoss?60:S.goal*4,bonus=Math.round(Math.max(0,par-S.time)*10);
+    S.bonus=bonus;S.par=par;S.score+=bonus;best=Math.max(best,S.score);
+    if(S.isBoss)S.hp=Math.min(CONFIG.lives,S.hp+1);
+    state='between';
+  }
+}
+function kill(e){
+  const len=e.word.length,t=S.time-e.lock,par=len*0.45+0.6;
+  const speedMult=1+Math.max(0,(par*2-t)/(par*2));
+  const pts=Math.round(len*10*speedMult*(e.pm||1)*(1+Math.min(S.combo,10)*0.1));
+  S.score+=pts;S.lvlScore+=pts;S.combo++;S.total++;S.target=null;swingT=1;
+  pops.push({x:e.x,y:e.y-60,t:0.9,txt:'+'+pts+(speedMult>1.6?' FAST!':'')});
+  slashes.push({x:e.x,y:e.y,t:0.2});
+  for(let i=0;i<(e.boss?30:14);i++)parts.push({x:e.x,y:e.y,vx:(Math.random()-.5)*300,vy:-Math.random()*200,t:0.6,c:Math.random()<.5?'#5dff8a':'#f2c94c'});
+  if(e.loot==='freeze'){S.freeze=4;pops.push({x:e.x,y:e.y,t:1.2,txt:'FREEZE!'})}
+  if(e.loot==='heart'){S.hp=Math.min(CONFIG.lives,S.hp+1);pops.push({x:e.x,y:e.y,t:1.2,txt:'+1 LIFE'})}
+  if(e.boss){
+    S.kills++;shake=0.3;
+    if(S.kills>=S.goal){S.score+=300;S.lvlScore+=300;enemies.length=0}
+    else{e.word=pickWord(1);e.typed=0;e.lock=S.time;e.y=Math.max(90,e.y-70);pops.push({x:e.x,y:e.y+70,t:1,txt:'PHASE '+S.kills+'/'+S.goal})}
+    return;
+  }
+  if(!S.isBoss)S.kills++;
+  enemies.splice(enemies.indexOf(e),1);
+}
+addEventListener('keydown',ev=>{
+  if(state!=='play'){
+    if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();if(state==='between'){S.level++;startLevel()}else newGame()}
+    return;
+  }
+  if(ev.key==='Escape'){if(S.target){S.target.typed=0;S.target=null}return}
+  if(ev.ctrlKey||ev.metaKey||ev.altKey)return;
+  const k=ev.key.toLowerCase();
+  if(!/^[a-z]$/.test(k))return;
+  ev.preventDefault();
+  let e=S.target;
+  if(e){
+    if(e.word[e.typed]===k){e.typed++;if(e.typed===e.word.length)kill(e)}
+    else{S.combo=0;flash=0.15}
+  }else{
+    const c=enemies.filter(n=>n.word[0]===k).sort((a,b)=>b.y-a.y)[0];
+    if(c){S.target=c;c.typed=1;c.lock=S.time;if(c.word.length===1)kill(c)}
+    else{S.combo=0;flash=0.15}
+  }
+});
+
+function txt(s,px,py,size,col,al){x.font='bold '+size+'px ui-monospace,Menlo,Consolas,monospace';x.textAlign=al||'center';x.fillStyle=col;x.fillText(s,px,py)}
+function drawBg(){
+  x.fillStyle='#17131f';x.fillRect(0,0,W,H);
+  x.strokeStyle='#241d33';x.lineWidth=2;
+  for(let r=0;r<12;r++){const y=r*52;x.beginPath();x.moveTo(0,y);x.lineTo(W,y);x.stroke();
+    for(let c=-1;c<9;c++){const bx=c*104+(r%2?52:0);x.beginPath();x.moveTo(bx,y);x.lineTo(bx,y+52);x.stroke()}}
+  const g=x.createLinearGradient(0,440,0,H);g.addColorStop(0,'#2a2238');g.addColorStop(1,'#120e1a');
+  x.fillStyle=g;x.fillRect(0,500,W,100);
+  [60,740].forEach((tx,i)=>{
+    const f=0.8+0.2*Math.sin(tick*9+i*2);
+    x.fillStyle='#4a3a2a';x.fillRect(tx-4,200,8,30);
+    x.fillStyle='rgba(255,150,40,'+(0.12*f)+')';x.beginPath();x.arc(tx,190,70*f,0,7);x.fill();
+    x.fillStyle='#ffb03a';x.beginPath();x.ellipse(tx,190,8*f,14*f,0,0,7);x.fill();
+    x.fillStyle='#fff2a0';x.beginPath();x.ellipse(tx,194,4*f,8*f,0,0,7);x.fill();
+  });
+  x.strokeStyle='rgba(217,74,106,.5)';x.setLineDash([8,8]);x.beginPath();x.moveTo(0,490);x.lineTo(W,490);x.stroke();x.setLineDash([]);
+}
+function drawKnight(){
+  x.save();x.translate(400,545);
+  x.fillStyle='rgba(0,0,0,.4)';x.beginPath();x.ellipse(0,42,34,8,0,0,7);x.fill();
+  x.fillStyle='#4a5068';x.fillRect(-14,18,10,24);x.fillRect(4,18,10,24);
+  x.fillStyle='#9aa4c4';x.fillRect(-20,-14,40,36);
+  x.fillStyle='#6b4a2b';x.fillRect(-20,10,40,5);
+  x.fillStyle='#b8c1dd';x.fillRect(-13,-40,26,26);
+  x.fillStyle='#14111c';x.fillRect(-9,-30,18,5);
+  x.fillStyle='#d94a6a';x.fillRect(-3,-52,6,13);
+  x.fillStyle='#3b6fd1';x.fillRect(-36,-8,16,28);x.fillStyle='#f2c94c';x.fillRect(-30,-2,4,16);
+  x.save();x.translate(24,0);x.rotate(-0.3+Math.sin(swingT*Math.PI)*1.5);
+  x.fillStyle='#e8ecf7';x.fillRect(-3,-46,6,46);x.fillStyle='#f2c94c';x.fillRect(-9,-2,18,5);x.restore();
+  x.restore();
+}
+function drawEnemy(e){
+  const isT=S.target===e,sz=e.size||44,by=e.y+Math.sin(tick*4+e.bob)*3;
+  if(e.loot){x.fillStyle='rgba(255,215,64,'+(0.25+0.15*Math.sin(tick*6))+')';x.beginPath();x.arc(e.x,by,sz*0.7,0,7);x.fill();x.font='20px serif';x.textAlign='center';x.fillText(e.loot==='heart'?'❤️':'❄️',e.x+sz*0.5,by-sz*0.4)}
+  x.font=sz+'px serif';x.textAlign='center';x.fillStyle='#fff';x.fillText(e.emoji,e.x,by+sz*0.32);
+  x.font='bold 22px ui-monospace,Menlo,Consolas,monospace';
+  const w=x.measureText(e.word).width,py=by-sz*0.5-14;
+  x.fillStyle='rgba(10,8,16,.85)';x.strokeStyle=isT?'#f2c94c':(e.boss?'#e0455f':e.loot?'#ffd740':(e.col||'#5a4a80'));x.lineWidth=isT?3:2;
+  x.beginPath();x.roundRect(e.x-w/2-8,py-20,w+16,30,6);x.fill();x.stroke();
+  x.textAlign='left';
+  const a=e.word.slice(0,e.typed),b=e.word.slice(e.typed);
+  x.fillStyle='#5dff8a';x.fillText(a,e.x-w/2,py);
+  x.fillStyle='#e8e3f5';x.fillText(b,e.x-w/2+x.measureText(a).width,py);
+}
+function hud(){
+  txt('LEVEL '+S.level+(S.isBoss?'  BOSS':''),16,28,20,S.isBoss?'#e0455f':'#f2c94c','left');
+  txt((S.isBoss?'Boss phase ':'Foes ')+S.kills+'/'+S.goal,16,52,16,'#c9c2e0','left');
+  if(S.isBoss){x.fillStyle='#2a1a22';x.fillRect(250,62,300,10);x.fillStyle='#e0455f';x.fillRect(250,62,300*(1-S.kills/S.goal),10)}
+  if(S.freeze>0){x.fillStyle='rgba(120,200,255,.14)';x.fillRect(0,0,W,H);txt('FROZEN '+S.freeze.toFixed(1)+'s',W/2,92,18,'#9fd8ff')}
+  txt('Score '+S.score,W/2,28,20,'#e8e3f5');
+  txt('Time '+S.time.toFixed(1)+'s',W/2,52,16,'#c9c2e0');
+  txt('♥'.repeat(Math.max(0,S.hp)),W-16,30,24,'#e0455f','right');
+  if(S.combo>1)txt('Combo x'+S.combo,W-16,54,16,'#5dff8a','right');
+}
+function panel(lines){
+  x.fillStyle='rgba(8,6,14,.82)';x.fillRect(0,0,W,H);
+  lines.forEach(l=>txt(l[0],W/2,l[1],l[2],l[3]));
+}
+function draw(){
+  x.save();
+  if(shake>0)x.translate((Math.random()-.5)*10,(Math.random()-.5)*10);
+  drawBg();
+  if(S&&state!=='title'){
+    enemies.slice().sort((a,b)=>a.y-b.y).forEach(drawEnemy);
+    slashes.forEach(s=>{x.strokeStyle='rgba(255,255,255,'+s.t*5+')';x.lineWidth=5;x.beginPath();x.moveTo(s.x-30,s.y-30);x.lineTo(s.x+30,s.y+30);x.stroke()});
+    parts.forEach(p=>{x.fillStyle=p.c;x.fillRect(p.x,p.y,5,5)});
+    pops.forEach(p=>txt(p.txt,p.x,p.y,18,'#f2c94c'));
+  }
+  drawKnight();
+  if(S&&state!=='title')hud();
+  if(flash>0){x.fillStyle='rgba(224,69,95,'+flash*.6+')';x.fillRect(0,0,W,H)}
+  x.restore();
+  if(state==='title')panel([['TYPING DUNGEON',230,52,'#f2c94c'],['Type the word above each foe to slay it.',300,18,'#e8e3f5'],['Wrong keys break your combo. Esc drops your target.',330,16,'#c9c2e0'],['Foes reaching the line cost a heart. Faster kills = more points.',358,16,'#c9c2e0'],['Gold-glow foes drop freeze or +1 life. Bats are fast, ogres slow & tough.',386,16,'#c9c2e0'],['Every 5th level is a boss.',410,16,'#e0455f'],['Press Enter to begin',455,24,'#5dff8a']]);
+  if(state==='between')panel([[S.isBoss?'BOSS SLAIN':'LEVEL '+S.level+' CLEARED',190,44,'#5dff8a'],...(S.isBoss?[['Boss +300 points, +1 life',415,18,'#5dff8a']]:[]),['Time '+S.time.toFixed(1)+'s  (par '+S.par+'s)',260,20,'#e8e3f5'],['Kill points +'+S.lvlScore,295,20,'#e8e3f5'],['Speed bonus +'+S.bonus,330,20,'#f2c94c'],['Total score '+S.score,380,26,'#e8e3f5'],['Press Enter for level '+(S.level+1),450,22,'#5dff8a']]);
+  if(state==='over')panel([['YOU HAVE FALLEN',200,48,'#e0455f'],['Reached level '+S.level,270,22,'#e8e3f5'],['Score '+S.score,310,26,'#f2c94c'],['Best '+best,345,20,'#c9c2e0'],['Press Enter to try again',420,22,'#5dff8a']]);
+}
+function loop(now){
+  const dt=Math.min(0.05,(now-last)/1000);last=now;
+  if(!S)S={score:0,hp:0,level:1,kills:0,goal:1,time:0,combo:0};
+  update(dt);draw();requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script></body></html>

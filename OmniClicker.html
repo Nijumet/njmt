@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Omni Clicker</title>
+<style>
+  :root {
+    --bg: #0f2a2b;
+    --panel: #163b3c;
+    --panel-edge: #2a5b59;
+    --chalk: #e8efe4;
+    --chalk-dim: #9db8ae;
+    --jade: #5fd4a0;
+    --jade-deep: #2c9f74;
+    --ochre: #e0a93b;
+    --brick: #c8553d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--chalk);
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Noto Serif CJK SC", "PingFang SC", "Songti SC", serif;
+    line-height: 1.5;
+    padding: 28px 20px 56px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: clamp(1.9rem, 4vw, 2.6rem); font-weight: 600; letter-spacing: 0.01em; }
+  .sub { margin: 0 0 28px; color: var(--chalk-dim); max-width: 60ch; }
+
+  .layout { display: grid; grid-template-columns: 240px 1fr; gap: 28px; align-items: start; }
+  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+
+  .press { display: flex; flex-direction: column; align-items: center; gap: 14px; position: sticky; top: 20px; }
+  @media (max-width: 760px) { .press { position: static; } }
+
+  #clicker {
+    width: 200px; height: 200px; border-radius: 50%;
+    border: 0; cursor: pointer;
+    background: radial-gradient(circle at 35% 30%, #8cf0c4, var(--jade) 45%, var(--jade-deep));
+    color: #0b2a21;
+    font-family: inherit; font-weight: 600; font-size: 1.6rem; line-height: 1;
+    box-shadow: 0 8px 0 #1c6e50, 0 14px 24px rgba(0,0,0,.35);
+    transition: transform .06s ease, box-shadow .06s ease;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none; touch-action: manipulation;
+  }
+  #clicker:active { transform: translateY(6px); box-shadow: 0 2px 0 #1c6e50, 0 6px 12px rgba(0,0,0,.35); }
+  #clicker:focus-visible { outline: 3px solid var(--ochre); outline-offset: 5px; }
+
+  #reset {
+    background: none; border: 1px solid var(--panel-edge); color: var(--chalk-dim);
+    font: inherit; font-size: .9rem; padding: 6px 14px; border-radius: 6px; cursor: pointer;
+  }
+  #reset:hover { color: var(--chalk); border-color: var(--chalk-dim); }
+  #reset.armed { color: #fff; background: var(--brick); border-color: var(--brick); }
+  #reset:focus-visible { outline: 3px solid var(--ochre); outline-offset: 2px; }
+
+  h3.group {
+    margin: 32px 0 12px; font-size: 1.15rem; font-weight: 600; color: var(--chalk);
+    padding-bottom: 6px; border-bottom: 1px solid var(--panel-edge);
+  }
+  h3.group:first-child { margin-top: 0; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 10px; padding: 14px 16px 16px; min-width: 0; }
+  .card.wide { grid-column: 1 / -1; }
+  .card h2 { margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--ochre); }
+  .card .rule { margin: 2px 0 10px; font-size: .86rem; color: var(--chalk-dim); }
+  .val { overflow-wrap: anywhere; word-break: break-word; }
+  .note { font-size: .82rem; color: var(--chalk-dim); margin-top: 6px; min-height: 1.2em; }
+  .empty { color: var(--chalk-dim); font-style: italic; }
+
+  .big { font-size: clamp(2.2rem, 6vw, 3.6rem); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 1.35rem; letter-spacing: .04em; }
+  .roman { font-size: 1.9rem; letter-spacing: .06em; }
+  .roman .v1 { text-decoration: overline; text-decoration-thickness: 2px; }
+  .roman .v2 { text-decoration: overline; text-decoration-thickness: 2px; border-top: 2px solid currentColor; }
+  .cjk { font-size: 2rem; letter-spacing: .08em; }
+  .braille { font-size: 2.2rem; letter-spacing: .12em; }
+  .greek { font-size: 1.9rem; letter-spacing: .04em; }
+  .hebrew { font-size: 2rem; letter-spacing: .04em; text-align: right; }
+  .words { font-size: 1.35rem; line-height: 1.4; }
+  .morse { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 1.5rem; font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+  .fac { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; }
+  .fac .col { display: flex; flex-direction: column; align-items: center; min-width: 38px; }
+  .fac .d { font-size: 1.7rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .fac .p { font-size: .78rem; color: var(--chalk-dim); border-top: 1px solid var(--panel-edge); padding-top: 2px; width: 100%; text-align: center; white-space: nowrap; }
+
+  .rows { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; align-items: baseline; }
+  .rows .k { font-size: .8rem; color: var(--chalk-dim); white-space: nowrap; }
+  .rows .v { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 1.05rem; overflow-wrap: anywhere; }
+  .rows .v.script { font-family: inherit; font-size: 1.4rem; letter-spacing: .06em; }
+
+  .tally { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+  .tally svg { width: 40px; height: 48px; stroke: currentColor; stroke-width: 3; stroke-linecap: round; fill: none; }
+  .more { color: var(--chalk-dim); font-size: .9rem; align-self: center; }
+
+  .aztec { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: flex-end; }
+  .az-group { display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-end; }
+  .az-dots { display: flex; gap: 4px; margin-right: 6px; }
+  .az-dots svg { width: 22px; height: 22px; fill: var(--brick); }
+  .az-big svg { width: 30px; height: 44px; stroke: var(--chalk); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; fill: none; }
+  .az-big .fill { fill: var(--ochre); stroke: var(--ochre); }
+  .az-times { font-size: 1.1rem; color: var(--chalk-dim); align-self: center; margin-left: 4px; }
+
+  .mayan { display: flex; flex-direction: column; align-items: center; width: max-content; max-width: 100%; }
+  .mayan .row { padding: 4px 8px; border-bottom: 1px dashed var(--panel-edge); }
+  .mayan .row:last-child { border-bottom: 0; }
+  .mayan svg { display: block; fill: var(--jade); }
+  .mayan .shell { fill: none; stroke: var(--chalk); stroke-width: 2; stroke-linecap: round; }
+
+  .babs { display: flex; flex-wrap: wrap; gap: 10px 0; }
+  .bab { display: flex; gap: 8px; align-items: flex-end; padding: 0 12px; border-left: 1px dashed var(--panel-edge); }
+  .bab:first-child { border-left: 0; padding-left: 0; }
+  .bab .tens { display: flex; flex-wrap: wrap; width: 58px; gap: 1px; }
+  .bab .ones { display: flex; flex-wrap: wrap; width: 42px; gap: 1px; }
+  .bab svg { fill: var(--chalk); }
+  .bab .chev { width: 18px; height: 22px; }
+  .bab .wedge { width: 13px; height: 22px; }
+  .bab .zero { width: 24px; height: 24px; fill: none; stroke: var(--chalk); stroke-width: 2.2; stroke-linecap: round; }
+
+  .cists { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+  .cist path { stroke: var(--chalk); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+  .cist path.g { stroke: var(--ochre); }
+
+  .bqs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .bq { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 8px 5px; border: 1px solid var(--panel-edge); border-radius: 8px; }
+  .lamps { display: flex; gap: 3px; }
+  .lamp { width: 18px; height: 18px; border-radius: 50%; background: rgba(0,0,0,.28); color: var(--chalk-dim); font-size: .62rem; display: flex; align-items: center; justify-content: center; }
+  .lamp.on { background: var(--ochre); color: #2a1d00; box-shadow: 0 0 8px rgba(224,169,59,.65); }
+  .bq .dg { font-size: 1.1rem; font-weight: 600; line-height: 1; }
+  .bq .code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .7rem; color: var(--chalk-dim); }
+
+  .ieee { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 1.05rem; letter-spacing: .03em; overflow-wrap: anywhere; }
+  .ieee .s { color: var(--brick); }
+  .ieee .e { color: var(--ochre); }
+  .ieee .m { color: var(--jade); }
+
+  .sors, .segs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sor { display: flex; flex-direction: column; align-items: center; }
+  .sor .dg { font-size: .85rem; color: var(--chalk-dim); }
+  .sor .rod { stroke: var(--chalk-dim); stroke-width: 2; }
+  .sor .beam { stroke: var(--chalk); stroke-width: 3; }
+  .sor .bead { fill: #3a6b66; stroke: #0f2a2b; stroke-width: 1; }
+  .sor .bead.on { fill: var(--ochre); }
+  .seg svg { display: block; }
+  .seg .off { stroke: rgba(0,0,0,.28); }
+  .seg .on { stroke: var(--brick); }
+  .seg line { stroke-width: 4; stroke-linecap: round; }
+
+  .bump { animation: bump .12s ease-out; }
+  @keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.04); } 100% { transform: scale(1); } }
+  @media (prefers-reduced-motion: reduce) { .bump { animation: none; } #clicker { transition: none; } }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="az-dot" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8"/></symbol>
+    <symbol id="az-flag" viewBox="0 0 30 44">
+      <line x1="7" y1="3" x2="7" y2="41"/>
+      <path class="fill" d="M7 5 C14 10 20 1 27 6 V24 C20 19 14 28 7 23 Z"/>
+    </symbol>
+    <symbol id="az-feather" viewBox="0 0 30 44">
+      <path d="M15 3 C28 11 28 29 15 41 C2 29 2 11 15 3 Z"/>
+      <line x1="15" y1="3" x2="15" y2="43"/>
+      <path d="M15 12 L22 16 M15 19 L24 23 M15 26 L22 30 M15 12 L8 16 M15 19 L6 23 M15 26 L8 30"/>
+    </symbol>
+    <symbol id="az-purse" viewBox="0 0 30 44">
+      <path d="M10 6 H20 L18 13 C28 19 28 38 15 41 C2 38 2 19 12 13 Z"/>
+      <path d="M11 13 H19"/>
+      <path d="M15 22 V32 M10 27 H20"/>
+    </symbol>
+    <symbol id="bab-wedge" viewBox="0 0 12 20"><path d="M1 1 H11 L7 12 V19 H5 V12 Z"/></symbol>
+    <symbol id="bab-chev" viewBox="0 0 16 20"><path d="M14 1 L2 10 L14 19 V14.5 L8 10 L14 5.5 Z"/></symbol>
+    <symbol id="bab-zero" viewBox="0 0 20 20"><path d="M4 3 L10 17 M10 3 L16 17"/></symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <h1>Omni Clicker</h1>
+  <p class="sub">One button, one count, dozens of ways to write it. Click and watch every system keep up.</p>
+
+  <div class="layout">
+    <div class="press">
+      <button id="clicker" type="button" aria-describedby="live">Click</button>
+      <button id="reset" type="button">Reset count</button>
+      <span id="live" class="sr" aria-live="polite"></span>
+    </div>
+    <div id="board"></div>
+  </div>
+</div>
+
+<script>
+// <pure>
+function groupRight(s, size) {
+  var out = [], i = s.length;
+  while (i > 0) { out.unshift(s.slice(Math.max(0, i - size), i)); i -= size; }
+  return out.join(' ');
+}
+function digitsInBase(n, b) {
+  if (n === 0) return [0];
+  var out = [];
+  while (n > 0) { out.unshift(n % b); n = Math.floor(n / b); }
+  return out;
+}
+function toBinaryGrouped(n) {
+  var b = n.toString(2);
+  var pad = (4 - (b.length % 4)) % 4;
+  return groupRight('0'.repeat(pad) + b, 4);
+}
+function toOctalGrouped(n) { return groupRight(n.toString(8), 3); }
+function toHexGrouped(n) { return groupRight(n.toString(16).toUpperCase(), 4); }
+
+function toRomanBase(n) {
+  var map = [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];
+  var s = '';
+  for (var i = 0; i < map.length; i++) {
+    while (n >= map[i][0]) { s += map[i][1]; n -= map[i][0]; }
+  }
+  return s;
+}
+function romanSegs(n, level) {
+  level = level || 0;
+  if (n === 0) return level ? [] : [{ t: 'N', l: 0 }];
+  if (n < 4000) return [{ t: toRomanBase(n), l: level }];
+  var hi = Math.floor(n / 1000), lo = n % 1000;
+  var segs = romanSegs(hi, level + 1);
+  if (lo) segs.push({ t: toRomanBase(lo), l: level });
+  return segs;
+}
+
+var CND = ['零','一','二','三','四','五','六','七','八','九'];
+function cnSection(n) {
+  var digs = [Math.floor(n / 1000) % 10, Math.floor(n / 100) % 10, Math.floor(n / 10) % 10, n % 10];
+  var u = ['千','百','十',''], s = '', zero = false;
+  for (var i = 0; i < 4; i++) {
+    var d = digs[i];
+    if (d === 0) { if (s) zero = true; }
+    else { if (zero) { s += '零'; zero = false; } s += CND[d] + u[i]; }
+  }
+  return s;
+}
+function toChinese(n) {
+  if (n === 0) return '零';
+  var secs = [], m = n;
+  for (var i = 0; i < 4; i++) { secs.push(m % 10000); m = Math.floor(m / 10000); }
+  var units = ['','万','亿','万亿'], out = '', pend = false;
+  for (var si = 3; si >= 0; si--) {
+    var v = secs[si];
+    if (v === 0) { if (out) pend = true; continue; }
+    var t = cnSection(v);
+    if (out && (pend || v < 1000)) t = '零' + t;
+    pend = false;
+    out += t + units[si];
+  }
+  if (out.indexOf('一十') === 0) out = out.slice(1);
+  return out;
+}
+
+var GK_U = ['','α','β','γ','δ','ε','ϛ','ζ','η','θ'];
+var GK_T = ['','ι','κ','λ','μ','ν','ξ','ο','π','ϟ'];
+var GK_H = ['','ρ','σ','τ','υ','φ','χ','ψ','ω','ϡ'];
+function gkBelow10k(n) {
+  var k = Math.floor(n / 1000), r = n % 1000, s = '';
+  if (k) s += '\u0375' + GK_U[k];
+  return s + GK_H[Math.floor(r / 100)] + GK_T[Math.floor(r / 10) % 10] + GK_U[r % 10];
+}
+function gkRaw(n) {
+  if (n < 10000) return gkBelow10k(n);
+  var q = Math.floor(n / 10000), r = n % 10000;
+  return gkRaw(q) + '\u039C' + (r ? ' ' + gkBelow10k(r) : '');
+}
+function toGreek(n) { return gkRaw(n) + '\u0374'; }
+
+var HB_U = ['','א','ב','ג','ד','ה','ו','ז','ח','ט'];
+var HB_T = ['','י','כ','ל','מ','נ','ס','ע','פ','צ'];
+var HB_H = ['','ק','ר','ש','ת'];
+function hebChunk(n) {
+  var h = Math.floor(n / 100), m = n % 100, s = '';
+  while (h >= 4) { s += 'ת'; h -= 4; }
+  s += HB_H[h];
+  if (m === 15) s += 'טו';
+  else if (m === 16) s += 'טז';
+  else s += HB_T[Math.floor(m / 10)] + HB_U[m % 10];
+  return s;
+}
+function toHebrew(n) {
+  if (n === 0) return 'אפס';
+  var chunks = [], m = n;
+  while (m > 0) { chunks.push(m % 1000); m = Math.floor(m / 1000); }
+  var out = '';
+  for (var i = chunks.length - 1; i > 0; i--) {
+    if (chunks[i]) out += hebChunk(chunks[i]) + '׳';
+  }
+  var L = chunks[0] ? hebChunk(chunks[0]) : '';
+  if (L) L = L.length === 1 ? L + '׳' : L.slice(0, -1) + '״' + L.slice(-1);
+  return out + L;
+}
+
+var EN_SMALL = ['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+var EN_TENS = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+var EN_SCALE = ['','thousand','million','billion','trillion','quadrillion'];
+function enBelow100(n) {
+  if (n < 20) return EN_SMALL[n];
+  return EN_TENS[Math.floor(n / 10)] + (n % 10 ? '-' + EN_SMALL[n % 10] : '');
+}
+function enBelow1000(n) {
+  var h = Math.floor(n / 100), r = n % 100, parts = [];
+  if (h) parts.push(EN_SMALL[h] + ' hundred');
+  if (r) parts.push(enBelow100(r));
+  return parts.join(' ');
+}
+function toEnglish(n) {
+  if (n === 0) return 'zero';
+  var parts = [], i = 0;
+  while (n > 0) {
+    var c = n % 1000;
+    if (c) parts.unshift(enBelow1000(c) + (EN_SCALE[i] ? ' ' + EN_SCALE[i] : ''));
+    n = Math.floor(n / 1000); i++;
+  }
+  return parts.join(' ');
+}
+
+var DIGIT_SCRIPTS = [
+  ['Eastern Arabic', '٠١٢٣٤٥٦٧٨٩'], ['Persian', '۰۱۲۳۴۵۶۷۸۹'], ['Devanagari', '०१२३४५६७८९'],
+  ['Bengali', '০১২৩৪৫৬৭৮৯'], ['Thai', '๐๑๒๓๔๕๖๗๘๙'], ['Khmer', '០១២៣៤៥៦៧៨៩'],
+  ['Tibetan', '༠༡༢༣༤༥༦༧༨༩'], ['Burmese', '၀၁၂၃၄၅၆၇၈၉']
+];
+function inScript(n, glyphs) {
+  var g = Array.from(glyphs);
+  return String(n).split('').map(function (d) { return g[+d]; }).join('');
+}
+
+function factoradic(n) {
+  if (n === 0) return [{ d: 0, p: 1 }];
+  var out = [], i = 1;
+  while (n > 0) { out.push(n % (i + 1)); n = Math.floor(n / (i + 1)); i++; }
+  var res = [];
+  for (var k = out.length - 1; k >= 0; k--) res.push({ d: out[k], p: k + 1 });
+  return res;
+}
+var PRIMES = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53];
+function primorialDigits(n) {
+  if (n === 0) return [{ d: 0, p: 1 }];
+  var out = [], place = 1, i = 0;
+  while (n > 0) {
+    out.push({ d: n % PRIMES[i], p: place });
+    n = Math.floor(n / PRIMES[i]);
+    place *= PRIMES[i]; i++;
+  }
+  return out.reverse();
+}
+function toSkewBinary(n) {
+  if (n === 0) return '0';
+  var w = [1];
+  while (w[w.length - 1] * 2 + 1 <= n) w.push(w[w.length - 1] * 2 + 1);
+  var s = '';
+  for (var i = w.length - 1; i >= 0; i--) {
+    var d = Math.floor(n / w[i]);
+    n -= d * w[i];
+    s += d;
+  }
+  return s;
+}
+function mixedRadix(n, radii) {
+  var out = [];
+  for (var i = 0; i < radii.length; i++) { out.push(n % radii[i]); n = Math.floor(n / radii[i]); }
+  out.push(n);
+  return out;
+}
+
+function aztecParts(n) {
+  var purse = Math.floor(n / 8000), r = n % 8000;
+  var feather = Math.floor(r / 400); r = r % 400;
+  var flag = Math.floor(r / 20);
+  return { purse: purse, feather: feather, flag: flag, dots: r % 20 };
+}
+
+// Phinary: exact arithmetic on a + b*phi with BigInt
+function phiSign(p, q) { // sign of p + q*sqrt(5)
+  if (p === 0n && q === 0n) return 0;
+  if (p >= 0n && q >= 0n) return 1;
+  if (p <= 0n && q <= 0n) return -1;
+  var l = p * p, r = 5n * q * q;
+  if (p > 0n) return l > r ? 1 : -1;
+  return r > l ? 1 : -1;
+}
+function phiCmp(x, y) { var a = x[0] - y[0], b = x[1] - y[1]; return phiSign(2n * a + b, b); }
+function phiSub(x, y) { return [x[0] - y[0], x[1] - y[1]]; }
+function phiMul(p) { return [p[1], p[0] + p[1]]; }
+function phiDiv(p) { return [p[1] - p[0], p[0]]; }
+function toPhinary(nNum) {
+  var n = BigInt(nNum);
+  if (n === 0n) return '0';
+  var rem = [n, 0n], pw = [[1n, 0n]];
+  while (phiCmp(phiMul(pw[pw.length - 1]), rem) <= 0) pw.push(phiMul(pw[pw.length - 1]));
+  var whole = '';
+  for (var k = pw.length - 1; k >= 0; k--) {
+    if (phiCmp(rem, pw[k]) >= 0) { whole += '1'; rem = phiSub(rem, pw[k]); } else whole += '0';
+  }
+  if (rem[0] === 0n && rem[1] === 0n) return whole;
+  var frac = '', p = pw[0];
+  for (var i = 0; i < 400 && !(rem[0] === 0n && rem[1] === 0n); i++) {
+    p = phiDiv(p);
+    if (phiCmp(rem, p) >= 0) { frac += '1'; rem = phiSub(rem, p); } else frac += '0';
+  }
+  return whole + '.' + frac;
+}
+
+function toZeckendorf(n) {
+  if (n === 0) return '0';
+  var f = [1, 2];
+  while (f[f.length - 1] + f[f.length - 2] <= n) f.push(f[f.length - 1] + f[f.length - 2]);
+  var s = '';
+  for (var i = f.length - 1; i >= 0; i--) {
+    if (f[i] <= n) { s += '1'; n -= f[i]; } else s += '0';
+  }
+  return s;
+}
+function toNegabase(n, b) {
+  if (n === 0) return '0';
+  var s = '';
+  while (n !== 0) {
+    var r = ((n % b) + b) % b;
+    s = r + s;
+    n = (n - r) / -b;
+  }
+  return s;
+}
+function toNegabinary(n) { return toNegabase(n, 2); }
+function toBalancedTernary(n) {
+  if (n === 0) return '0';
+  var s = '';
+  while (n !== 0) {
+    var r = n % 3;
+    if (r === 0) { s = '0' + s; n = n / 3; }
+    else if (r === 1) { s = '1' + s; n = (n - 1) / 3; }
+    else { s = 'T' + s; n = (n + 1) / 3; }
+  }
+  return s;
+}
+function toDozenal(n) { return n.toString(12).toUpperCase().replace(/A/g, 'X').replace(/B/g, 'E'); }
+function toSexagesimal(n) {
+  return digitsInBase(n, 60).map(function (d, i) { return i === 0 ? String(d) : (d < 10 ? '0' + d : String(d)); }).join(':');
+}
+function toGray(n) {
+  var b = BigInt(n);
+  var g = (b ^ (b >> 1n)).toString(2);
+  var pad = (4 - (g.length % 4)) % 4;
+  return groupRight('0'.repeat(pad) + g, 4);
+}
+function toBijective26(n) {
+  var s = '';
+  while (n > 0) { n--; s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26); }
+  return s;
+}
+function nibble(d) { var b = d.toString(2); return '0'.repeat(4 - b.length) + b; }
+function toBCD(n) { return String(n).split('').map(function (d) { return nibble(+d); }).join(' '); }
+function toExcess3(n) { return String(n).split('').map(function (d) { return nibble(+d + 3); }).join(' '); }
+var AIKEN = ['0000','0001','0010','0011','0100','1011','1100','1101','1110','1111'];
+var TWO_OF_FIVE = ['11000','00011','00101','00110','01001','01010','01100','10001','10010','10100'];
+function toAiken(n) { return String(n).split('').map(function (d) { return AIKEN[+d]; }).join(' '); }
+function toTwoOfFive(n) { return String(n).split('').map(function (d) { return TWO_OF_FIVE[+d]; }).join(' '); }
+function toEliasGamma(n) { var b = n.toString(2); return '0'.repeat(b.length - 1) + b; }
+function toIEEE(n) {
+  var dv = new DataView(new ArrayBuffer(8));
+  dv.setFloat64(0, n);
+  var b = dv.getBigUint64(0).toString(2);
+  b = '0'.repeat(64 - b.length) + b;
+  return [b.slice(0, 1), b.slice(1, 12), b.slice(12)];
+}
+function biquinary(d) {
+  var q = d % 5;
+  return { bi: d >= 5 ? '10' : '01', q: '0'.repeat(4 - q) + '1' + '0'.repeat(q) };
+}
+var BRAILLE = ['⠚','⠁','⠃','⠉','⠙','⠑','⠋','⠛','⠓','⠊'];
+var MORSE = ['-----','.----','..---','...--','....-','.....','-....','--...','---..','----.'];
+var SEGMAP = ['abcdef','bc','abdeg','abcdg','bcfg','acdfg','acdefg','abc','abcdefg','abcdfg'];
+var CIST = {
+  1: [['A','B']], 2: [['C','D']], 3: [['A','D']], 4: [['C','B']], 5: [['C','B'],['A','B']],
+  6: [['B','D']], 7: [['A','B'],['B','D']], 8: [['C','D'],['B','D']], 9: [['A','B'],['C','D'],['B','D']]
+};
+// </pure>
+
+var MAX = Number.MAX_SAFE_INTEGER;
+var KEY = 'omni-clicker-count';
+var count = 0;
+try {
+  var saved = parseInt(localStorage.getItem(KEY), 10);
+  if (isFinite(saved) && saved > 0) count = Math.min(saved, MAX);
+} catch (e) {}
+
+function fmt(n) { return n.toLocaleString('en-US'); }
+function use(id) {
+  return '<svg viewBox="' + (id === 'az-dot' ? '0 0 20 20' : '0 0 30 44') + '" aria-hidden="true"><use href="#' + id + '"/></svg>';
+}
+function plain(cls, fn) { return function (n) { return '<div class="' + cls + '">' + fn(n) + '</div>'; }; }
+function cols(items) {
+  var html = '';
+  items.forEach(function (it) { html += '<div class="col"><span class="d">' + it[0] + '</span><span class="p">' + it[1] + '</span></div>'; });
+  return '<div class="fac">' + html + '</div>';
+}
+
+function htmlRoman(n) {
+  var segs = romanSegs(n), html = '', barred = false;
+  for (var i = 0; i < segs.length; i++) {
+    var l = Math.min(segs[i].l, 2);
+    if (l) barred = true;
+    html += '<span class="v' + l + '">' + segs[i].t + '</span>';
+  }
+  var note = n === 0 ? 'N stands for nulla, the Roman word for nothing.' : (barred ? 'Barred letters are multiplied by 1,000.' : '');
+  return '<div class="roman">' + html + '</div><div class="note">' + note + '</div>';
+}
+function htmlFactorial(n) {
+  return cols(factoradic(n).map(function (x) { return [x.d, x.p + '!']; }));
+}
+function htmlPrimorial(n) {
+  return cols(primorialDigits(n).map(function (x) { return [x.d, fmt(x.p)]; }));
+}
+function htmlMixed(labels, radii) {
+  return function (n) {
+    var d = mixedRadix(n, radii), items = [];
+    for (var i = d.length - 1; i >= 0; i--) items.push([fmt(d[i]), labels[i]]);
+    return cols(items);
+  };
+}
+function htmlAztec(n) {
+  if (n === 0) return '<span class="empty">No symbol for zero.</span>';
+  var a = aztecParts(n), html = '<div class="aztec">';
+  if (a.purse > 0) {
+    html += '<div class="az-group az-big">';
+    if (a.purse <= 8) { for (var p = 0; p < a.purse; p++) html += use('az-purse'); }
+    else html += use('az-purse') + '<span class="az-times">×' + fmt(a.purse) + '</span>';
+    html += '</div>';
+  }
+  if (a.feather > 0) {
+    html += '<div class="az-group az-big">';
+    for (var f = 0; f < a.feather; f++) html += use('az-feather');
+    html += '</div>';
+  }
+  if (a.flag > 0) {
+    html += '<div class="az-group az-big">';
+    for (var g = 0; g < a.flag; g++) html += use('az-flag');
+    html += '</div>';
+  }
+  if (a.dots > 0) {
+    html += '<div class="az-group">';
+    var left = a.dots;
+    while (left > 0) {
+      var take = Math.min(5, left);
+      html += '<div class="az-dots">';
+      for (var d = 0; d < take; d++) html += use('az-dot');
+      html += '</div>';
+      left -= take;
+    }
+    html += '</div>';
+  }
+  return html + '</div>';
+}
+
+var GROUP_LIMIT = 60;
+function tallySvg(marks) {
+  var s = '<svg viewBox="0 0 40 48" aria-hidden="true">';
+  for (var i = 0; i < Math.min(marks, 4); i++) {
+    var x = 8 + i * 8;
+    s += '<line x1="' + x + '" y1="5" x2="' + x + '" y2="43"/>';
+  }
+  if (marks === 5) s += '<line x1="2" y1="36" x2="38" y2="11"/>';
+  return s + '</svg>';
+}
+function htmlTally(n) {
+  if (n === 0) return '<span class="empty">No marks yet.</span>';
+  var groups = Math.floor(n / 5), rem = n % 5, html = '';
+  var shown = Math.min(groups, GROUP_LIMIT);
+  if (groups > shown) {
+    var hidden = groups - shown;
+    html += '<span class="more">+ ' + fmt(hidden) + ' earlier group' + (hidden === 1 ? '' : 's') + ' of five</span>';
+  }
+  for (var i = 0; i < shown; i++) html += tallySvg(5);
+  if (rem) html += tallySvg(rem);
+  return '<div class="tally">' + html + '</div>';
+}
+
+function mayanGlyph(d) {
+  if (d === 0) {
+    return '<svg width="44" height="24" viewBox="0 0 44 24" aria-label="0"><ellipse class="shell" cx="22" cy="12" rx="18" ry="9"/>' +
+      '<path class="shell" d="M7 12 H37 M14 6.5 Q22 12 30 6.5 M14 17.5 Q22 12 30 17.5"/></svg>';
+  }
+  var dots = d % 5, bars = Math.floor(d / 5), y = 3, s = '';
+  if (dots) {
+    for (var i = 0; i < dots; i++) s += '<circle cx="' + (22 + (i - (dots - 1) / 2) * 11) + '" cy="' + (y + 4.5) + '" r="4.3"/>';
+    y += 12;
+  }
+  for (var b = 0; b < bars; b++) { s += '<rect x="3" y="' + y + '" width="38" height="7" rx="3.5"/>'; y += 10; }
+  var h = y + 1;
+  return '<svg width="44" height="' + h + '" viewBox="0 0 44 ' + h + '" aria-label="' + d + '">' + s + '</svg>';
+}
+function htmlMayan(n) {
+  var html = digitsInBase(n, 20).map(function (d) { return '<div class="row">' + mayanGlyph(d) + '</div>'; }).join('');
+  return '<div class="mayan">' + html + '</div>';
+}
+
+function htmlBabylonian(n) {
+  if (n === 0) return '<span class="empty">No zero on its own, only as a placeholder inside a number.</span>';
+  var html = '';
+  digitsInBase(n, 60).forEach(function (d) {
+    if (d === 0) {
+      html += '<div class="bab"><svg class="zero" viewBox="0 0 20 20" aria-label="placeholder"><use href="#bab-zero"/></svg></div>';
+      return;
+    }
+    var tens = Math.floor(d / 10), ones = d % 10, t = '', o = '', i;
+    for (i = 0; i < tens; i++) t += '<svg class="chev" viewBox="0 0 16 20" aria-hidden="true"><use href="#bab-chev"/></svg>';
+    for (i = 0; i < ones; i++) o += '<svg class="wedge" viewBox="0 0 12 20" aria-hidden="true"><use href="#bab-wedge"/></svg>';
+    html += '<div class="bab" aria-label="' + d + '"><div class="tens">' + t + '</div><div class="ones">' + o + '</div></div>';
+  });
+  return '<div class="babs">' + html + '</div>';
+}
+
+function cistQuad(d, sx, top) {
+  if (!d) return '';
+  var y0 = top ? 6 : 58, y1 = top ? 20 : 44;
+  var P = { A: [0, 0], B: [1, 0], C: [0, 1], D: [1, 1] };
+  var path = '';
+  CIST[d].forEach(function (seg) {
+    seg.forEach(function (k, i) {
+      var p = P[k], x = 22 + sx * 14 * p[0], y = y0 + (y1 - y0) * p[1];
+      path += (i ? 'L' : 'M') + x + ' ' + y + ' ';
+    });
+  });
+  return '<path class="g" d="' + path + '"/>';
+}
+function cistGlyph(num) {
+  var u = num % 10, t = Math.floor(num / 10) % 10, h = Math.floor(num / 100) % 10, k = Math.floor(num / 1000) % 10;
+  return '<svg class="cist" width="44" height="64" viewBox="0 0 44 64" aria-label="' + num + '"><path d="M22 6 V58"/>' +
+    cistQuad(u, 1, true) + cistQuad(t, -1, true) + cistQuad(h, 1, false) + cistQuad(k, -1, false) + '</svg>';
+}
+function htmlCistercian(n) {
+  var chunks = [], m = n;
+  do { chunks.unshift(m % 10000); m = Math.floor(m / 10000); } while (m > 0);
+  return '<div class="cists">' + chunks.map(cistGlyph).join('') + '</div>';
+}
+
+function htmlBraille(n) {
+  return '<div class="braille">⠼' + String(n).split('').map(function (d) { return BRAILLE[+d]; }).join('') + '</div>';
+}
+function htmlMorse(n) {
+  return '<div class="morse">' + String(n).split('').map(function (d) {
+    return '<span>' + MORSE[+d].replace(/\./g, '·').replace(/-/g, '—') + '</span>';
+  }).join('') + '</div>';
+}
+function htmlScripts(n) {
+  var html = '';
+  DIGIT_SCRIPTS.forEach(function (s) {
+    html += '<span class="k">' + s[0] + '</span><span class="v script" dir="ltr">' + inScript(n, s[1]) + '</span>';
+  });
+  return '<div class="rows">' + html + '</div>';
+}
+function rows(list) {
+  return function (n) {
+    var html = '';
+    list.forEach(function (r) { html += '<span class="k">' + r[0] + '</span><span class="v">' + r[1](n) + '</span>'; });
+    return '<div class="rows">' + html + '</div>';
+  };
+}
+
+function htmlBiquinary(n) {
+  var html = '';
+  String(n).split('').forEach(function (ch) {
+    var d = +ch, c = biquinary(d);
+    html += '<div class="bq"><div class="lamps">';
+    [['5', c.bi === '10'], ['0', c.bi === '01']].forEach(function (t) {
+      html += '<span class="lamp' + (t[1] ? ' on' : '') + '">' + t[0] + '</span>';
+    });
+    html += '</div><div class="lamps">';
+    [4, 3, 2, 1, 0].forEach(function (q) { html += '<span class="lamp' + (q === d % 5 ? ' on' : '') + '">' + q + '</span>'; });
+    html += '</div><span class="dg">' + d + '</span><span class="code">' + c.bi + ' ' + c.q + '</span></div>';
+  });
+  return '<div class="bqs">' + html + '</div>';
+}
+function htmlRNS(n) {
+  return cols([255, 256, 257].map(function (k) { return [n % k, 'mod ' + k]; }));
+}
+function htmlIEEE(n) {
+  var p = toIEEE(n);
+  return '<div class="ieee"><span class="s">' + p[0] + '</span> <span class="e">' + p[1] + '</span> <span class="m">' + groupRight(p[2], 4) + '</span></div>' +
+    '<div class="note"><span class="s">sign</span> · <span class="e">exponent</span> · <span class="m">mantissa</span></div>';
+}
+
+function sorobanCol(d) {
+  var heaven = d >= 5, q = d % 5;
+  var s = '<svg width="30" height="96" viewBox="0 0 28 96" aria-hidden="true"><line class="rod" x1="14" y1="2" x2="14" y2="94"/><line class="beam" x1="0" y1="31" x2="28" y2="31"/>';
+  s += '<ellipse class="bead' + (heaven ? ' on' : '') + '" cx="14" cy="' + (heaven ? 23 : 11) + '" rx="10" ry="6"/>';
+  for (var i = 0; i < 4; i++) {
+    var active = i < q;
+    s += '<ellipse class="bead' + (active ? ' on' : '') + '" cx="14" cy="' + (active ? 40 + 10 * i : 58 + 10 * i) + '" rx="10" ry="5"/>';
+  }
+  return '<div class="sor">' + s + '</svg><span class="dg">' + d + '</span></div>';
+}
+function htmlSoroban(n) {
+  return '<div class="sors">' + String(n).split('').map(function (c) { return sorobanCol(+c); }).join('') + '</div>';
+}
+function segDigit(d) {
+  var lines = {
+    a: [4, 4, 20, 4], b: [20, 4, 20, 20], c: [20, 20, 20, 36], d: [4, 36, 20, 36],
+    e: [4, 20, 4, 36], f: [4, 4, 4, 20], g: [4, 20, 20, 20]
+  };
+  var on = SEGMAP[d], s = '<svg width="30" height="48" viewBox="0 0 24 40" aria-label="' + d + '">';
+  'abcdefg'.split('').forEach(function (k) {
+    var l = lines[k];
+    s += '<line class="' + (on.indexOf(k) >= 0 ? 'on' : 'off') + '" x1="' + l[0] + '" y1="' + l[1] + '" x2="' + l[2] + '" y2="' + l[3] + '"/>';
+  });
+  return '<div class="seg">' + s + '</svg></div>';
+}
+function htmlSegments(n) {
+  return '<div class="segs">' + String(n).split('').map(function (c) { return segDigit(+c); }).join('') + '</div>';
+}
+
+var GROUPS = [
+  { title: 'Everyday bases', cards: [
+    { title: 'Base 10', rule: 'Ten digits, each place worth ten times the one to its right.', wide: true, html: plain('big', fmt) },
+    { title: 'Binary', rule: 'Two digits; each place doubles. Grouped in fours.', html: plain('mono', toBinaryGrouped) },
+    { title: 'Octal', rule: 'Eight digits; each place is worth eight times the next. Grouped in threes.', html: plain('mono', toOctalGrouped) },
+    { title: 'Hexadecimal', rule: 'Sixteen digits, 0 to 9 then A to F. Grouped in fours.', html: plain('mono', toHexGrouped) }
+  ]},
+  { title: 'Written and carved', cards: [
+    { title: 'Roman numerals', rule: 'Letters add and subtract. A bar multiplies by 1,000.', html: htmlRoman },
+    { title: 'Chinese numerals', rule: 'Each place has a name: 十 ten, 百 hundred, 千 thousand, 万 ten thousand, 亿 hundred million.', html: plain('cjk', toChinese) },
+    { title: 'Greek numerals', rule: 'Letters stand for 1 to 9, 10 to 90 and 100 to 900. A low mark before a letter means thousands; Μ means ten thousands.', html: function (n) { return n === 0 ? '<span class="empty">No zero in this system.</span>' : '<div class="greek">' + toGreek(n) + '</div>'; } },
+    { title: 'Hebrew numerals', rule: 'Letters carry values: א is 1, י is 10, ק is 100. Read right to left.', html: function (n) { return '<div class="hebrew" dir="rtl" lang="he">' + toHebrew(n) + '</div>'; } },
+    { title: 'Aztec numerals', rule: 'Dots are 1, the flag is 20, the feather is 400, the purse is 8,000.', html: htmlAztec },
+    { title: 'Mayan numerals', rule: 'Dot is 1, bar is 5, shell is 0. Places stack top to bottom, each worth 20 times the one below.', html: htmlMayan },
+    { title: 'Babylonian numerals', rule: 'Base 60. A wedge is 1, a chevron is 10. A slanted pair marks an empty place.', html: htmlBabylonian },
+    { title: 'Cistercian numerals', rule: 'One stem holds four digits: units top right, tens top left, hundreds bottom right, thousands bottom left.', html: htmlCistercian },
+    { title: 'Braille', rule: 'The ⠼ sign announces a number; the letters a to j stand for 1 to 9 and 0.', html: htmlBraille },
+    { title: 'Morse code', rule: 'Every digit is five dots and dashes.', html: htmlMorse },
+    { title: 'Digits in other scripts', rule: 'The same ten digits, written in eight other scripts.', wide: true, html: htmlScripts },
+    { title: 'English words', rule: 'Spelled out, with the short scale: million, billion, trillion, quadrillion.', wide: true, html: plain('words', toEnglish) },
+    { title: 'Tally marks', rule: 'Four strokes and a slash make five.', wide: true, html: htmlTally }
+  ]},
+  { title: 'Unusual bases', cards: [
+    { title: 'Factorial base', rule: 'Each digit counts how many of its place\u2019s factorial fit. Place k allows digits up to k.', html: htmlFactorial },
+    { title: 'Primorial base', rule: 'Places are 1, 2, 6, 30, 210… each the product of the first few primes. The digit in each place stays below the next prime.', html: htmlPrimorial },
+    { title: 'Skew binary', rule: 'Places are 1, 3, 7, 15, 31… Digits are 0, 1 or 2, and only the lowest nonzero digit can be 2.', html: plain('mono', toSkewBinary) },
+    { title: 'Phinary', rule: 'Base φ, about 1.618. Digits are 0 and 1, never two 1s side by side, and there is a fractional part.', html: plain('mono', toPhinary) },
+    { title: 'Zeckendorf', rule: 'Places are Fibonacci numbers 1, 2, 3, 5, 8, 13… Digits are 0 or 1, never two 1s side by side.', html: plain('mono', toZeckendorf) },
+    { title: 'Negabinary', rule: 'Base −2. Places are worth 1, −2, 4, −8… so no minus sign is ever needed.', html: plain('mono', function (n) { return groupRight(toNegabinary(n), 4); }) },
+    { title: 'Balanced ternary', rule: 'Base 3 with digits −1 (T), 0 and 1. Places are worth 1, 3, 9, 27…', html: plain('mono', toBalancedTernary) },
+    { title: 'Bijective base 26', rule: 'A to Z are 1 to 26, then AA, AB… like spreadsheet columns.', html: function (n) { return n === 0 ? '<span class="empty">No zero in this system.</span>' : '<div class="mono">' + toBijective26(n) + '</div>'; } },
+    { title: 'More positional bases', rule: 'Dozenal uses X for ten and E for eleven. Base 60 is written in decimal chunks.', wide: true, html: rows([
+      ['Ternary (3)', function (n) { return n.toString(3); }],
+      ['Senary (6)', function (n) { return n.toString(6); }],
+      ['Dozenal (12)', toDozenal],
+      ['Vigesimal (20)', function (n) { return n.toString(20).toUpperCase(); }],
+      ['Base 36', function (n) { return n.toString(36).toUpperCase(); }],
+      ['Sexagesimal (60)', toSexagesimal],
+      ['Negadecimal (−10)', function (n) { return toNegabase(n, 10); }]
+    ]) }
+  ]},
+  { title: 'Mixed radix', cards: [
+    { title: 'Clock and calendar', rule: 'The count as seconds: 60 to a minute, 60 to an hour, 24 to a day, 7 to a week.', html: htmlMixed(['sec', 'min', 'hours', 'days', 'weeks'], [60, 60, 24, 7]) },
+    { title: 'Pounds, shillings and pence', rule: 'The count as old British pennies: 12 to a shilling, 20 shillings to a pound.', html: htmlMixed(['pence', 'shillings', 'pounds'], [12, 20]) },
+    { title: 'Miles, yards, feet and inches', rule: 'The count as inches: 12 to a foot, 3 feet to a yard, 1,760 yards to a mile.', html: htmlMixed(['inches', 'feet', 'yards', 'miles'], [12, 3, 1760]) }
+  ]},
+  { title: 'Machine codes', cards: [
+    { title: 'Binary-coded decimal', rule: 'Each decimal digit gets its own four bits.', html: plain('mono', toBCD) },
+    { title: 'Bi-quinary coded decimal', rule: 'Seven lamps per digit: one of two (5 or 0) and one of five (4 to 0), as on the IBM 650.', wide: true, html: htmlBiquinary },
+    { title: 'Other decimal codes', rule: 'Excess-3 adds 3 to each digit. Aiken 2421 weights its bits 2, 4, 2, 1. Two-out-of-five always has exactly two 1s.', wide: true, html: rows([
+      ['Excess-3', toExcess3], ['Aiken 2421', toAiken], ['2-out-of-5', toTwoOfFive]
+    ]) },
+    { title: 'Gray code', rule: 'Binary arranged so only one bit changes from one count to the next.', html: plain('mono', toGray) },
+    { title: 'Elias gamma', rule: 'A run of zeros one shorter than the binary number, then the binary number itself.', html: function (n) { return n === 0 ? '<span class="empty">No code for zero.</span>' : '<div class="mono">' + toEliasGamma(n) + '</div>'; } },
+    { title: 'IEEE 754 double', rule: 'How a computer stores the count as a 64-bit floating-point number.', html: htmlIEEE },
+    { title: 'Residue number system', rule: 'The remainders after dividing by 255, 256 and 257. Unique for counts below 16,776,960.', html: htmlRNS }
+  ]},
+  { title: 'Instruments', cards: [
+    { title: 'Soroban', rule: 'A Japanese abacus. Each rod is one digit: the top bead is worth 5, each bottom bead 1, and beads pushed to the beam count.', wide: true, html: htmlSoroban },
+    { title: 'Seven-segment display', rule: 'The digits on a calculator or digital clock.', wide: true, html: htmlSegments }
+  ]}
+];
+
+var board = document.getElementById('board');
+var cardEls = [];
+GROUPS.forEach(function (g) {
+  var h = document.createElement('h3');
+  h.className = 'group';
+  h.textContent = g.title;
+  board.appendChild(h);
+  var grid = document.createElement('div');
+  grid.className = 'cards';
+  g.cards.forEach(function (c) {
+    var sec = document.createElement('section');
+    sec.className = 'card' + (c.wide ? ' wide' : '');
+    var h2 = document.createElement('h2'); h2.textContent = c.title;
+    var p = document.createElement('p'); p.className = 'rule'; p.textContent = c.rule;
+    var v = document.createElement('div'); v.className = 'val';
+    sec.appendChild(h2); sec.appendChild(p); sec.appendChild(v);
+    grid.appendChild(sec);
+    cardEls.push({ el: v, fn: c.html });
+  });
+  board.appendChild(grid);
+});
+
+var live = document.getElementById('live');
+function render() {
+  for (var i = 0; i < cardEls.length; i++) cardEls[i].el.innerHTML = cardEls[i].fn(count);
+  live.textContent = fmt(count);
+  try { localStorage.setItem(KEY, String(count)); } catch (e) {}
+}
+function bump() {
+  var first = cardEls[0].el.firstChild;
+  if (!first) return;
+  first.classList.remove('bump');
+  void first.offsetWidth;
+  first.classList.add('bump');
+}
+
+document.getElementById('clicker').addEventListener('click', function () {
+  if (count < MAX) count++;
+  render();
+  bump();
+});
+
+var resetBtn = document.getElementById('reset'), resetTimer = null;
+resetBtn.addEventListener('click', function () {
+  if (resetBtn.classList.contains('armed')) {
+    clearTimeout(resetTimer);
+    resetBtn.classList.remove('armed');
+    resetBtn.textContent = 'Reset count';
+    count = 0;
+    render();
+  } else {
+    resetBtn.classList.add('armed');
+    resetBtn.textContent = 'Click again to reset';
+    resetTimer = setTimeout(function () {
+      resetBtn.classList.remove('armed');
+      resetBtn.textContent = 'Reset count';
+    }, 3000);
+  }
+});
+
+render();
+</script>
+</body>
+</html>
