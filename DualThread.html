@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dual Thread</title>
+<style>
+  html,body{margin:0;height:100%;background:#070a14;color:#cfe8ff;font-family:ui-monospace,Menlo,Consolas,monospace;overflow:hidden}
+  #wrap{position:relative;height:100%;display:flex;align-items:center;justify-content:center}
+  canvas{max-width:100vw;max-height:100vh;aspect-ratio:960/540;width:min(100vw,177.7vh);background:#0a0f1f;border-radius:10px;box-shadow:0 0 60px #0af3}
+  .ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:#050812cc;backdrop-filter:blur(3px)}
+  .ov.hide{display:none}
+  h1{font-size:clamp(32px,6vw,64px);margin:0 0 6px;letter-spacing:.12em;color:#fff;text-shadow:0 0 20px #3df,0 0 40px #f6a}
+  p{margin:6px 20px;max-width:560px;line-height:1.5;color:#9bb8d8}
+  button{margin:8px;padding:12px 22px;font:inherit;font-size:16px;color:#071018;background:#5ef;border:0;border-radius:8px;cursor:pointer;box-shadow:0 0 18px #5ef8}
+  button:hover{background:#fff}
+  button.sm{margin:3px;padding:6px 11px;font-size:13px;min-width:36px}
+  #lv{max-width:660px}
+  b.a{color:#5aa8ff}b.b{color:#ffa94d}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c" width="960" height="540"></canvas>
+  <div id="menu" class="ov">
+    <h1>DUAL THREAD</h1>
+    <p>Two little robots. One glowing laser tether. Neither can stray too far from the other.</p>
+    <p><b class="a">Anchor</b> is heavy. <b class="b">Bolt</b> is light. When the tether runs over a pulley, the heavy one wins the tug-of-war.</p>
+    <div>
+      <button id="solo">1 Player (Tab swaps robot)</button>
+      <button id="coop">2 Players (co-op)</button>
+    </div>
+    <p style="margin-bottom:0">Level select:</p>
+    <div id="lv"></div>
+    <p style="font-size:13px">Solo: WASD / arrows to move &amp; jump, <b>Tab</b> to switch robot.<br>
+    Co-op: <b class="a">Anchor = WASD</b>, <b class="b">Bolt = arrow keys</b>.<br>R restarts the level, N / P skip to the next / previous level, Esc returns here.</p>
+  </div>
+  <div id="done" class="ov hide">
+    <h1 id="dt">LEVEL CLEAR</h1>
+    <p id="dp"></p>
+    <button id="next">Continue</button>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<script>
+if (typeof Matter === 'undefined') {
+  document.getElementById('menu').innerHTML = '<h1>DUAL THREAD</h1><p>Could not load Matter.js. Check your internet connection and reload.</p>';
+}
+const { Engine, Bodies, Body, Composite, Events } = Matter;
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const W = 960, H = 540, FLOOR = 500;
+
+// ---------- Levels ----------
+// plats: [x, y, w, h] (top-left). L = tether max length. pulley: [x,y] or null.
+const LEVELS = [
+  { name: '1 · First Steps',
+    hint: 'The tether limits how far apart you can get. Cross the pit together.',
+    plats: [[0,FLOOR,400,60],[520,FLOOR,440,60],[680,440,280,60]],
+    A: [80,484], B: [140,486], L: 190, pulley: null,
+    exitA: [800,380,50,60], exitB: [870,380,50,60] },
+  { name: '2 · Counterweight',
+    hint: 'Bolt can\'t climb the pillar. The tether runs over the pulley… Anchor is heavy.',
+    plats: [[0,FLOOR,960,60],[440,390,80,110],[600,300,120,16]],
+    A: [660,282], B: [390,486], L: 360, pulley: [480,382],
+    exitA: [740,420,60,80], exitB: [448,330,64,60] },
+  { name: '3 · The Long Haul',
+    hint: 'Walk Anchor away from the wall and watch the thread. Then reunite at the far side.',
+    plats: [[0,FLOOR,400,60],[400,350,560,190]],
+    A: [560,334], B: [340,486], L: 380, pulley: [404,344],
+    exitA: [860,290,50,60], exitB: [790,290,50,60] },
+  { name: '4 · Stepping Stones',
+    hint: 'Don\'t fall. The short tether means you must hop across the pit in tandem.',
+    plats: [[0,500,120,60],[840,500,120,60],[200,470,80,14],[340,430,80,14],[480,390,80,14],[620,430,80,14],[760,470,80,14]],
+    A: [30,484], B: [80,486], L: 170, pulley: null,
+    exitA: [860,440,40,60], exitB: [910,440,40,60] },
+  { name: '5 · Spike Alley',
+    hint: 'Red spikes are deadly. Time your jumps; the tether keeps your partner close.',
+    plats: [[0,500,960,60]],
+    haz: [[280,488,60,12],[480,488,80,12],[680,488,70,12]],
+    A: [60,484], B: [110,486], L: 150, pulley: null,
+    exitA: [820,440,40,60], exitB: [880,440,40,60] },
+  { name: '6 · Lift Shaft',
+    hint: 'Bolt is stuck in the pit. Walk Anchor far to the left and the pulley will haul Bolt out.',
+    plats: [[0,500,400,200],[400,640,120,60],[520,500,440,200]],
+    A: [200,484], B: [460,626], L: 370, pulley: [400,492],
+    exitA: [850,440,40,60], exitB: [900,440,40,60] },
+  { name: '7 · Mirror Lift',
+    hint: 'Like before, but flipped. Step Anchor off the ledge on the other side.',
+    plats: [[0,500,960,60],[440,390,80,110],[240,300,120,16]],
+    A: [300,282], B: [570,486], L: 360, pulley: [480,382],
+    exitA: [160,420,60,80], exitB: [448,330,64,60] },
+  { name: '8 · Zig-Zag Climb',
+    hint: 'Short leash, tall tower. Neither robot can get far above the other.',
+    plats: [[0,500,960,60],[300,440,90,14],[170,370,90,14],[320,300,90,14],[190,230,90,14],[340,160,200,14]],
+    A: [60,484], B: [110,486], L: 180, pulley: null,
+    exitA: [430,100,40,60], exitB: [480,100,40,60] },
+  { name: '9 · Tall Order',
+    hint: 'A much taller wall. Anchor has to walk a long way to haul Bolt all the way up.',
+    plats: [[0,500,400,60],[400,300,560,260]],
+    A: [560,284], B: [340,486], L: 450, pulley: [404,294],
+    exitA: [880,240,50,60], exitB: [800,240,50,60] },
+  { name: '10 · Razor Ridge',
+    hint: 'The plateau is covered in spikes. Haul Bolt up, then hop over them together.',
+    plats: [[0,500,400,60],[400,350,560,190]],
+    haz: [[600,338,50,12],[700,338,50,12]],
+    A: [540,334], B: [340,486], L: 380, pulley: [404,344],
+    exitA: [880,290,50,60], exitB: [820,290,50,60] },
+  { name: '11 · Spike Steps',
+    hint: 'A staircase of pillars with spikes in between. Don\'t miss a jump.',
+    plats: [[0,500,960,60],[240,440,80,60],[400,380,80,120],[560,320,80,180],[720,260,240,240]],
+    haz: [[320,488,80,12],[480,488,80,12],[640,488,80,12]],
+    A: [60,484], B: [110,486], L: 170, pulley: null,
+    exitA: [790,200,40,60], exitB: [850,200,40,60] },
+  { name: '12 · Grand Finale',
+    hint: 'Lift Bolt out of the deep pit, then cross the gap together. Falling in means restart (R).',
+    plats: [[0,500,300,200],[300,660,300,60],[400,430,100,14],[600,380,360,320]],
+    A: [200,484], B: [360,644], L: 285, pulley: [300,492],
+    exitA: [850,320,50,60], exitB: [905,320,50,60] },
+  // doors/plates: plate [x,y,w,h,id,heavy?], door [x,y,w,h,id]. pads: [x,y,w]. drafts: [x,y,w,h]
+  { name: '13 · Pressure Point',
+    hint: 'A plate holds the door open only while someone stands on it. Use the plate on each side.',
+    plats: [[0,500,960,60]],
+    plates: [[200,494,60,6,1],[540,494,60,6,1]], doors: [[480,340,20,160,1]],
+    A: [80,484], B: [140,486], L: 360, pulley: null,
+    exitA: [800,440,40,60], exitB: [860,440,40,60] },
+  { name: '14 · Heavy Metal',
+    hint: 'Only heavy Anchor can trigger the gold plate. Bolt can use the plain one. Mind the order.',
+    plats: [[0,500,960,60]],
+    plates: [[140,494,70,6,1],[450,494,70,6,1,true]], doors: [[400,340,20,160,1]],
+    haz: [[620,488,70,12],[760,488,50,12]],
+    A: [60,484], B: [110,486], L: 330, pulley: null,
+    exitA: [840,440,40,60], exitB: [890,440,40,60] },
+  { name: '15 · Spring Loaded',
+    hint: 'Green pads launch you skyward. Hold a direction in the air to clear the ledge.',
+    plats: [[0,500,380,60],[470,260,490,300]],
+    pads: [[300,492,70]],
+    A: [60,484], B: [110,486], L: 330, pulley: null,
+    exitA: [800,200,50,60], exitB: [860,200,50,60] },
+  { name: '16 · Updraft',
+    hint: 'The air column lifts light Bolt but barely nudges heavy Anchor. Anchor needs the pad.',
+    plats: [[0,500,520,60],[520,240,440,320]],
+    drafts: [[330,180,90,320]], pads: [[430,492,70]],
+    A: [100,484], B: [160,486], L: 340, pulley: null,
+    exitA: [800,180,50,60], exitB: [860,180,50,60] },
+  { name: '17 · Chain Reaction',
+    hint: 'Two doors. Bolt can press plain plates; only Anchor can press the gold one. Plan who goes first.',
+    plats: [[0,500,960,60]],
+    plates: [[120,494,60,6,1],[380,494,60,6,1],[430,494,60,6,2],[670,494,60,6,2,true]],
+    doors: [[330,340,20,160,1],[620,340,20,160,2]],
+    A: [60,484], B: [90,486], L: 300, pulley: null,
+    exitA: [840,440,40,60], exitB: [890,440,40,60] },
+  // ---- 18-20: the updraft on its own ----
+  { name: '18 · Thermals',
+    hint: 'Bolt is stuck in the pit. The air column lifts light Bolt out, but heavy Anchor must jump the gap.',
+    plats: [[0,500,300,200],[300,680,160,60],[460,500,500,240]],
+    drafts: [[340,440,80,240]],
+    A: [200,484], B: [380,664], L: 300, pulley: null,
+    exitA: [800,440,40,60], exitB: [860,440,40,60] },
+  // bridge doors: [x,y,w,h,id,true] are solid only while their plate is held
+  { name: '19 · Skybridge',
+    hint: 'Only Bolt can ride the updraft across. Hold the far plate to raise a bridge for Anchor. Mind the ceiling spikes.',
+    plats: [[0,500,330,60],[630,500,330,60]],
+    drafts: [[430,60,100,440]], haz: [[430,60,100,12,1]],
+    plates: [[650,494,50,6,1]], doors: [[330,500,300,12,1,true]],
+    A: [100,484], B: [160,486], L: 380, pulley: null,
+    exitA: [800,440,40,60], exitB: [860,440,40,60] },
+  { name: '20 · Relay',
+    hint: 'Bolt rides the updraft to the shelf plate. Anchor opens the door, then holds the far plate so Bolt can follow.',
+    plats: [[0,500,960,60],[300,300,130,16]],
+    drafts: [[150,200,100,300]],
+    plates: [[340,294,60,6,1],[640,494,60,6,1]], doors: [[560,340,20,160,1]],
+    A: [60,484], B: [120,486], L: 400, pulley: null,
+    exitA: [800,440,40,60], exitB: [860,440,40,60] },
+  // ---- 21-26: one new mechanic each ----
+  { name: '21 · Cargo Run',
+    hint: 'Push each crate onto its plate. A crate never gets tired of holding a door open.',
+    plats: [[0,500,960,60],[196,480,10,20],[516,480,10,20]],
+    crates: [[50,460,40],[330,460,40]],
+    plates: [[130,494,60,6,1],[450,494,60,6,2]], doors: [[270,340,20,160,1],[580,340,20,160,2]],
+    A: [30,484], B: [115,486], L: 320, pulley: null,
+    exitA: [780,440,40,60], exitB: [840,440,40,60] },
+  { name: '22 · Shuttle Service',
+    hint: 'A moving platform is the only way over the void. Board it together and hold on.',
+    plats: [[0,500,200,60],[760,500,200,60]],
+    movers: [[200,500,140,12,420,0,480]],
+    A: [60,484], B: [120,486], L: 190, pulley: null,
+    exitA: [850,440,40,60], exitB: [900,440,40,60] },
+  { name: '23 · Black Ice',
+    hint: 'Ice gives no grip. Build up speed early, and jump before you run out of floor.',
+    plats: [[0,500,160,60],[160,500,260,60],[500,500,200,60],[700,500,260,60]],
+    ice: [[160,500,260],[500,500,200]],
+    haz: [[504,488,40,12]],
+    A: [40,484], B: [100,486], L: 160, pulley: null,
+    exitA: [820,440,40,60], exitB: [880,440,40,60] },
+  // timed plates: plate = [x,y,w,h,id,heavy,frames]
+  { name: '24 · Beat the Clock',
+    hint: 'The door only stays open for a few seconds after the plate is released. Get both of you through in time.',
+    plats: [[0,500,330,60],[330,440,100,120],[430,380,100,180],[530,320,100,240],[630,320,330,240]],
+    plates: [[100,494,70,6,1,false,420]], doors: [[700,160,20,160,1]],
+    A: [40,484], B: [70,486], L: 260, pulley: null,
+    exitA: [820,260,40,60], exitB: [880,260,40,60] },
+  // crumbling slabs: crumbs = [x,y,w,h]
+  { name: '25 · Crumble Bridge',
+    hint: 'Each slab falls shortly after you touch it, then grows back. Keep moving and keep close.',
+    plats: [[0,500,200,60],[760,500,200,60]],
+    crumbs: [[200,500,80,14],[280,500,80,14],[360,470,80,14],[440,500,80,14],[520,500,80,14],[600,470,80,14],[680,500,80,14]],
+    A: [40,484], B: [90,486], L: 130, pulley: null,
+    exitA: [830,440,40,60], exitB: [890,440,40,60] },
+  // belts: [x,y,w,dir]
+  { name: '26 · Treadmill',
+    hint: 'The first belt drags you back, the second one hurls you forward. Time your jumps.',
+    plats: [[0,500,160,60],[160,500,300,60],[540,500,200,60],[740,500,220,60]],
+    belts: [[160,500,300,-1],[540,500,200,1]],
+    haz: [[660,488,50,12]],
+    A: [40,484], B: [100,486], L: 160, pulley: null,
+    exitA: [830,440,40,60], exitB: [890,440,40,60] },
+  { name: '27 · Machine Hall',
+    hint: 'Crate, shuttle, spring pad. Everything you learned, in order.',
+    plats: [[0,500,330,60],[196,480,10,20],[590,380,370,180],[800,180,160,200]],
+    crates: [[50,460,40]],
+    plates: [[130,494,60,6,1]], doors: [[270,340,20,160,1]],
+    movers: [[330,500,110,12,150,-120,420]],
+    pads: [[650,372,70]],
+    A: [30,484], B: [115,486], L: 240, pulley: null,
+    exitA: [830,120,40,60], exitB: [890,120,40,60] },
+  // ---- 28-31: things that interact with the thread ----
+  // sensors: [x,y,w,h,id] fire while the THREAD passes through them. cutters: [x,y,w,h,dx,dy,period,phase] snap the thread.
+  { name: '28 · Tripwire',
+    hint: 'The thread itself is the key. Stretch it across the glowing strip to open the door.',
+    plats: [[0,500,960,60],[400,250,190,16]],
+    drafts: [[300,150,80,350]],
+    sensors: [[380,318,230,8,1]], doors: [[480,340,20,160,1]],
+    A: [60,484], B: [330,486], L: 420, pulley: null,
+    exitA: [800,440,40,60], exitB: [860,440,40,60] },
+  { name: '29 · Guillotine',
+    hint: 'Robots pass the blades unharmed, but the thread gets cut. Cross while the blade is raised, staying close.',
+    plats: [[0,500,960,60]],
+    cutters: [[476,230,8,230,0,60,240,0],[676,230,8,230,0,60,240,3.1416]],
+    A: [60,484], B: [110,486], L: 150, pulley: null,
+    exitA: [800,440,40,60], exitB: [860,440,40,60] },
+  { name: '30 · Behind the Wall',
+    hint: 'Thread passes through walls. Get Bolt over the top so the thread crosses the wall\'s sensor.',
+    plats: [[0,500,960,60],[440,300,80,120]],
+    drafts: [[250,150,100,350]],
+    sensors: [[440,300,80,200,1]], doors: [[470,420,20,80,1]],
+    A: [150,484], B: [290,486], L: 380, pulley: null,
+    exitA: [800,440,40,60], exitB: [860,440,40,60] },
+  { name: '31 · Loose Ends',
+    hint: 'Slip past the blade together, then use the thread to open the tunnel under the wall.',
+    plats: [[0,500,960,60],[640,300,80,120]],
+    drafts: [[450,150,100,350]],
+    cutters: [[246,230,8,230,0,60,240,0]],
+    sensors: [[640,300,80,200,1]], doors: [[670,420,20,80,1]],
+    A: [60,484], B: [110,486], L: 360, pulley: null,
+    exitA: [790,440,40,60], exitB: [850,440,40,60] }
+];
+let doors = [], plates = [], crates = [], movers = [], crumbs = [], sensors = [], cutters = [];
+
+// ---------- State ----------
+let engine, A, B, P, lvl, lvlIdx = 0, active = 0, mode = 'solo', state = 'menu';
+let hold = 0, acc = 0, last = 0, shake = 0, t = 0;
+const keys = {};
+const MA = 3, MB = 1;
+
+function load(i) {
+  lvlIdx = i; lvl = LEVELS[i];
+  engine = Engine.create();
+  engine.positionIterations = 10; engine.velocityIterations = 8;
+  const st = { isStatic: true, friction: 0, frictionStatic: 0, label: 'plat' };
+  const bodies = lvl.plats.map(([x,y,w,h]) => Bodies.rectangle(x+w/2, y+h/2, w, h, st));
+  bodies.push(Bodies.rectangle(-30, 270, 60, 1400, st), Bodies.rectangle(W+30, 270, 60, 1400, st));
+  const rb = r => ({ friction: 0, frictionStatic: 0, restitution: 0, frictionAir: 0.004, label: 'robot' });
+  A = Bodies.circle(lvl.A[0], lvl.A[1], 16, rb()); B = Bodies.circle(lvl.B[0], lvl.B[1], 13, rb());
+  [[A, MA],[B, MB]].forEach(([r, m]) => { Body.setMass(r, m); Body.setInertia(r, Infinity); r.ground = 0; r.jbuf = 0; r.face = 1; });
+  Composite.add(engine.world, [...bodies, A, B]);
+  doors = (lvl.doors||[]).map(([x,y,w,h,id,bridge]) => ({ x, y, w, h, id, bridge: !!bridge, open: !!bridge, body: Bodies.rectangle(x+w/2, y+h/2, w, h, st) }));
+  plates = (lvl.plates||[]).map(([x,y,w,h,id,heavy,timer]) => ({ x, y, w, h, id, heavy, timer: timer || 0, t: 0, on: false }));
+  Composite.add(engine.world, doors.filter(d => !d.open).map(d => d.body));
+  crates = (lvl.crates||[]).map(([x,y,s]) => {
+    const c = Bodies.rectangle(x+s/2, y+s/2, s, s, { friction: 0, frictionStatic: 0, restitution: 0, frictionAir: 0.004, label: 'crate' });
+    Body.setMass(c, 2); Body.setInertia(c, Infinity); c.s = s; c.ground = 0; c.home = { x: x+s/2, y: y+s/2 }; return c; });
+  movers = (lvl.movers||[]).map(([x,y,w,h,dx,dy,per]) => ({ x, y, w, h, ox: x, oy: y, dx, dy, per,
+    body: Bodies.rectangle(x+w/2, y+h/2, w, h, st) }));
+  crumbs = (lvl.crumbs||[]).map(([x,y,w,h]) => ({ x, y, w, h, tm: 0, re: 0, gone: false, body: Bodies.rectangle(x+w/2, y+h/2, w, h, st) }));
+  Composite.add(engine.world, [...crates, ...movers.map(m => m.body), ...crumbs.map(c => c.body)]);
+  P = lvl.pulley ? { x: lvl.pulley[0], y: lvl.pulley[1] } : null;
+  Events.on(engine, 'collisionActive', onCol);
+  Events.on(engine, 'collisionStart', onCol);
+  Events.on(engine, 'afterUpdate', () => { for (let i = 0; i < 4; i++) solveTether(); });
+  sensors = (lvl.sensors||[]).map(([x,y,w,h,id]) => ({ x, y, w, h, id, on: false }));
+  cutters = (lvl.cutters||[]).map(([x,y,w,h,dx,dy,per,ph]) => ({ x, y, w, h, ox: x, oy: y, dx: dx||0, dy: dy||0, per: per||1, ph: ph||0, cx: x, cy: y }));
+  t = 0; cutters.forEach(c => cutAt(c, 0));
+  hold = 0; active = 0;
+}
+function onCol(e) {
+  for (const p of e.pairs) for (const r of [p.bodyA, p.bodyB]) {
+    if (r.label !== 'robot' && r.label !== 'crate') continue;
+    const s = p.collision.supports;
+    if (s.some(v => v && v.y > r.position.y + rad(r) * 0.35)) r.ground = 7;
+  }
+}
+
+// ---------- Tether (max-distance rope, optionally over a pulley) ----------
+function tetherGeom() {
+  const a = A.position, b = B.position;
+  if (P && (a.x - P.x) * (b.x - P.x) < 0) {
+    const da = Math.hypot(a.x-P.x, a.y-P.y) || 1, db = Math.hypot(b.x-P.x, b.y-P.y) || 1;
+    return { pulley: true, e: da+db-lvl.L, len: da+db,
+      uA: { x:(a.x-P.x)/da, y:(a.y-P.y)/da }, uB: { x:(b.x-P.x)/db, y:(b.y-P.y)/db } };
+  }
+  const d = Math.hypot(a.x-b.x, a.y-b.y) || 1;
+  return { pulley: false, e: d-lvl.L, len: d,
+    uA: { x:(a.x-b.x)/d, y:(a.y-b.y)/d }, uB: { x:(b.x-a.x)/d, y:(b.y-a.y)/d } };
+}
+function solveTether() {
+  const g = tetherGeom(), M = MA + MB, wA = MB / M, wB = MA / M;
+  if (g.e > 0) {
+    Body.setPosition(A, { x: A.position.x - g.uA.x*g.e*wA, y: A.position.y - g.uA.y*g.e*wA });
+    Body.setPosition(B, { x: B.position.x - g.uB.x*g.e*wB, y: B.position.y - g.uB.y*g.e*wB });
+  }
+  if (g.e > -0.5) {
+    const s = A.velocity.x*g.uA.x + A.velocity.y*g.uA.y + B.velocity.x*g.uB.x + B.velocity.y*g.uB.y;
+    if (s > 0) {
+      Body.setVelocity(A, { x: A.velocity.x - g.uA.x*s*wA, y: A.velocity.y - g.uA.y*s*wA });
+      Body.setVelocity(B, { x: B.velocity.x - g.uB.x*s*wB, y: B.velocity.y - g.uB.y*s*wB });
+    }
+  }
+}
+
+function cutAt(c, tt) {
+  const th = tt / c.per * Math.PI * 2 + c.ph, off = Math.min(1, Math.max(0, 0.5 - 0.75 * Math.cos(th)));
+  c.cx = c.ox + c.dx * off; c.cy = c.oy + c.dy * off;
+}
+function threadSegs() {
+  const g = tetherGeom(), a = A.position, b = B.position;
+  return g.pulley ? [[a, P], [P, b]] : [[a, b]];
+}
+function segHit(p, q, x, y, w, h) {
+  let t0 = 0, t1 = 1; const dx = q.x - p.x, dy = q.y - p.y;
+  for (const [pp, qq] of [[-dx, p.x - x], [dx, x + w - p.x], [-dy, p.y - y], [dy, y + h - p.y]]) {
+    if (pp === 0) { if (qq < 0) return false; }
+    else { const r = qq / pp; if (pp < 0) { if (r > t1) return false; if (r > t0) t0 = r; } else { if (r < t0) return false; if (r < t1) t1 = r; } }
+  }
+  return true;
+}
+
+// ---------- Input ----------
+const isJump = c => c === 'ArrowUp' || c === 'KeyW' || c === 'Space';
+addEventListener('keydown', e => {
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Tab'].includes(e.code)) e.preventDefault();
+  if (e.repeat) return;
+  keys[e.code] = true;
+  if (state !== 'play') return;
+  if (e.code === 'KeyR') load(lvlIdx);
+  if (e.code === 'KeyN') load((lvlIdx + 1) % LEVELS.length);
+  if (e.code === 'KeyP') load((lvlIdx + LEVELS.length - 1) % LEVELS.length);
+  if (e.code === 'Escape') { state = 'menu'; show('menu', true); }
+  if (mode === 'solo') {
+    if (e.code === 'Tab' || e.code === 'KeyE') active ^= 1;
+    if (isJump(e.code)) (active ? B : A).jbuf = 8;
+  } else {
+    if (e.code === 'KeyW') A.jbuf = 8;
+    if (e.code === 'ArrowUp') B.jbuf = 8;
+  }
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+const rad = r => r.circleRadius || r.s / 2;
+// surface strip under a body: ice [x,y,w] / belts [x,y,w,dir]
+function surf(list, r) {
+  if (!list) return null; const b = r.position.y + rad(r);
+  return list.find(z => r.position.x > z[0] && r.position.x < z[0] + z[2] && Math.abs(b - z[1]) < 6) || null;
+}
+function drive(r, dir, spd = 3.2) {
+  const g = r.ground > 0, ice = g && surf(lvl.ice, r), bl = g && surf(lvl.belts, r), bs = bl ? bl[3] * 1.6 : 0;
+  let vx = r.velocity.x, vy = r.velocity.y;
+  if (dir) { vx += (dir*spd + bs - vx) * (ice ? 0.04 : g ? 0.35 : 0.18); r.face = dir; }
+  else if (bl) vx += (bs - vx) * 0.35;
+  else vx *= ice ? 0.995 : g ? 0.8 : 0.99;
+  if (r.jbuf > 0 && g) { vy = -8.3; r.ground = 0; r.jbuf = 0; }
+  Body.setVelocity(r, { x: vx, y: vy });
+}
+const dirOf = (l, r) => (keys[r] ? 1 : 0) - (keys[l] ? 1 : 0);
+
+function mech() {
+  for (const p of plates) {
+    const pr = [A,B].some(r => (!p.heavy || r === A) && r.position.x > p.x-6 && r.position.x < p.x+p.w+6 && r.position.y + r.circleRadius > p.y-4 && r.position.y < p.y+p.h)
+      || crates.some(c => c.position.x > p.x && c.position.x < p.x+p.w && c.position.y + c.s/2 > p.y-4 && c.position.y < p.y+p.h);
+    if (p.timer) { if (pr) p.t = p.timer; else if (p.t > 0) p.t--; p.on = p.t > 0; } else p.on = pr;
+  }
+  const segs = threadSegs();
+  // a sensor needs the thread to pass THROUGH it from outside; a robot standing inside only keeps an already-open door held
+  for (const z of sensors) {
+    const anyIn = [A, B].some(r => r.position.x > z.x && r.position.x < z.x + z.w && r.position.y > z.y && r.position.y < z.y + z.h);
+    const cross = !anyIn && segs.some(([p, q]) => segHit(p, q, z.x, z.y, z.w, z.h));
+    z.on = cross || (z.on && anyIn);
+  }
+  for (const d of doors) {
+    const pushed = plates.some(p => p.id === d.id && p.on) || sensors.some(z => z.id === d.id && z.on), o = d.bridge ? !pushed : pushed;
+    if (o === d.open) continue;
+    if (!o && [A,B,...crates].some(r => r.position.x > d.x-rad(r) && r.position.x < d.x+d.w+rad(r) && r.position.y > d.y && r.position.y < d.y+d.h)) continue;
+    d.open = o; o ? Composite.remove(engine.world, d.body) : Composite.add(engine.world, d.body);
+  }
+  for (const c of crumbs) {
+    if (!c.gone) {
+      const on = [A,B,...crates].some(r => r.ground > 0 && Math.abs(r.position.y + rad(r) - c.y) < 5 && r.position.x > c.x-4 && r.position.x < c.x+c.w+4);
+      if (on || c.tm > 0) c.tm++;
+      if (c.tm > 55) { c.gone = true; c.re = 240; Composite.remove(engine.world, c.body); }
+    } else if (--c.re <= 0) {
+      if ([A,B,...crates].some(r => r.position.x > c.x-rad(r) && r.position.x < c.x+c.w+rad(r) && r.position.y > c.y-rad(r)-4 && r.position.y < c.y+c.h+rad(r))) c.re = 1;
+      else { c.gone = false; c.tm = 0; Composite.add(engine.world, c.body); }
+    }
+  }
+  for (const r of [A,B]) {
+    const bot = r.position.y + r.circleRadius;
+    for (const [x,y,w] of (lvl.pads||[])) if (r.position.x > x-4 && r.position.x < x+w+4 && bot > y-2 && bot < y+14 && r.velocity.y >= -1) {
+      Body.setVelocity(r, { x: r.velocity.x, y: -12.5 }); r.ground = 0; shake = Math.max(shake, 3);
+    }
+    for (const [x,y,w,h] of (lvl.drafts||[])) if (r.position.x > x && r.position.x < x+w && r.position.y > y && r.position.y < y+h)
+      Body.setVelocity(r, { x: r.velocity.x, y: Math.max(r.velocity.y - (r === B ? 0.55 : 0.12), -3.5) });
+  }
+}
+function step() {
+  for (const r of [A, B]) { r.ground--; r.jbuf--; }
+  if (mode === 'solo') {
+    const d = dirOf('KeyA','KeyD') || dirOf('ArrowLeft','ArrowRight');
+    drive(A, active === 0 ? d : 0); drive(B, active === 1 ? d : 0);
+  } else { drive(A, dirOf('KeyA','KeyD')); drive(B, dirOf('ArrowLeft','ArrowRight')); }
+  for (const m of movers) {
+    const th = (t + 1) / m.per * Math.PI * 2, off = Math.min(1, Math.max(0, 0.5 - 0.75 * Math.cos(th)));
+    const nx = m.ox + m.dx * off, ny = m.oy + m.dy * off, mx = nx - m.x, my = ny - m.y;
+    for (const r of [A, B, ...crates]) if (r.position.x > m.x - 2 && r.position.x < m.x + m.w + 2 && Math.abs(r.position.y + rad(r) - m.y) < 6 && r.velocity.y > -1.5)
+      Body.translate(r, { x: mx, y: my });
+    m.x = nx; m.y = ny; Body.setPosition(m.body, { x: nx + m.w/2, y: ny + m.h/2 });
+  }
+  for (const c of cutters) cutAt(c, t + 1);
+  for (const c of crates) {
+    c.ground--;
+    const bl = c.ground > 0 && surf(lvl.belts, c); let vx = c.velocity.x;
+    if (bl) vx += (bl[3] * 1.6 - vx) * 0.2; else if (c.ground > 0) vx *= 0.8;
+    Body.setVelocity(c, { x: vx, y: c.velocity.y });
+    if (c.position.y > 700) { Body.setPosition(c, c.home); Body.setVelocity(c, { x: 0, y: 0 }); }
+  }
+  Engine.update(engine, 1000 / 60);
+  mech();
+  t++;
+  if (cutters.some(c => threadSegs().some(([p, q]) => segHit(p, q, c.cx, c.cy, c.w, c.h)))) { shake = 14; load(lvlIdx); return; }
+  const hit = (r, [x,y,w,h]) => { const k = r.circleRadius * .6;
+    return r.position.x > x-k && r.position.x < x+w+k && r.position.y > y-k && r.position.y < y+h+r.circleRadius; };
+  if (A.position.y > 700 || B.position.y > 700 || (lvl.haz && lvl.haz.some(z => hit(A, z) || hit(B, z)))) { shake = 12; load(lvlIdx); return; }
+  const inside = (r, [x,y,w,h]) => r.position.x > x && r.position.x < x+w && r.position.y > y && r.position.y < y+h;
+  if (inside(A, lvl.exitA) && inside(B, lvl.exitB)) hold++; else hold = Math.max(0, hold - 2);
+  if (hold >= 45) finish();
+}
+function finish() {
+  state = 'done';
+  const last = lvlIdx === LEVELS.length - 1;
+  document.getElementById('dt').textContent = last ? 'THREADS UNTANGLED' : 'LEVEL CLEAR';
+  document.getElementById('dp').textContent = last ? 'You beat every puzzle. Two robots, one tether, zero tangles.' : 'Nicely done. Next: ' + LEVELS[lvlIdx+1].name;
+  document.getElementById('next').textContent = last ? 'Play again' : 'Next level';
+  show('done', true);
+}
+
+// ---------- Drawing ----------
+function drawBot(r, col, label, act) {
+  const R = r.circleRadius, { x, y } = r.position;
+  ctx.save(); ctx.translate(x, y);
+  ctx.shadowColor = col; ctx.shadowBlur = act ? 26 : 12;
+  ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.fillStyle = '#0d1426'; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = col; ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#04070f'; ctx.beginPath(); ctx.roundRect(-R*0.7, -R*0.45, R*1.4, R*0.8, 5); ctx.fill();
+  ctx.fillStyle = col;
+  const f = r.face * 2;
+  ctx.fillRect(-R*0.42 + f, -R*0.2, 4, 5); ctx.fillRect(R*0.1 + f, -R*0.2, 4, 5);
+  ctx.strokeStyle = col; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, -R); ctx.lineTo(0, -R-7); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, -R-8, 2.5, 0, 7); ctx.fill();
+  ctx.fillStyle = col; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center'; ctx.fillText(label, 0, R*0.75);
+  ctx.restore();
+  if (act && mode === 'solo') {
+    ctx.save(); ctx.fillStyle = col; ctx.beginPath();
+    const ay = y - R - 26 + Math.sin(t / 8) * 3;
+    ctx.moveTo(x - 6, ay); ctx.lineTo(x + 6, ay); ctx.lineTo(x, ay + 8); ctx.fill(); ctx.restore();
+  }
+}
+function curve(p, q, sag) {
+  ctx.beginPath(); ctx.moveTo(p.x, p.y);
+  ctx.quadraticCurveTo((p.x+q.x)/2, (p.y+q.y)/2 + sag, q.x, q.y); ctx.stroke();
+}
+function drawTether() {
+  const g = tetherGeom(), a = A.position, b = B.position;
+  const tension = Math.min(1, Math.max(0, (g.len - lvl.L * 0.9) / (lvl.L * 0.1)));
+  const col = `rgb(${Math.round(60 + 195*tension)},${Math.round(230 - 120*tension)},${Math.round(255 - 40*tension)})`;
+  ctx.save(); ctx.lineCap = 'round';
+  const slack = Math.max(0, lvl.L - g.len), sagTot = Math.min(70, Math.sqrt(slack * lvl.L) * 0.35);
+  const pass = (w, c, blur) => {
+    ctx.lineWidth = w; ctx.strokeStyle = c; ctx.shadowColor = col; ctx.shadowBlur = blur;
+    if (g.pulley) { curve(a, P, sagTot/2); curve(P, b, sagTot/2); } else curve(a, b, sagTot);
+  };
+  pass(7, col + '', 20); ctx.globalAlpha = .9; pass(2, '#fff', 0);
+  ctx.restore();
+}
+function drawPulley() {
+  if (!P) return;
+  ctx.save(); ctx.strokeStyle = '#7a88b8'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(P.x, P.y + 16); ctx.lineTo(P.x, P.y); ctx.stroke();
+  ctx.beginPath(); ctx.arc(P.x, P.y - 2, 9, 0, 7); ctx.fillStyle = '#141b33'; ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(P.x, P.y - 2, 2.5, 0, 7); ctx.fillStyle = '#7a88b8'; ctx.fill();
+  ctx.restore();
+}
+function drawExit(r, col, label, filled) {
+  const [x, y, w, h] = r;
+  ctx.save(); ctx.shadowColor = col; ctx.shadowBlur = 16; ctx.strokeStyle = col; ctx.lineWidth = 2;
+  ctx.setLineDash([8, 6]); ctx.lineDashOffset = -t / 3; ctx.strokeRect(x, y, w, h);
+  ctx.setLineDash([]); ctx.globalAlpha = .12 + .2 * filled; ctx.fillStyle = col; ctx.fillRect(x, y, w, h);
+  ctx.globalAlpha = 1; ctx.fillStyle = col; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center';
+  ctx.fillText(label, x + w/2, y + h/2 + 5); ctx.restore();
+}
+const pc = ['#4f9','#fd5','#f6a'];
+function draw() {
+  ctx.save();
+  if (shake > 0) { ctx.translate((Math.random()-.5)*shake, (Math.random()-.5)*shake); shake *= .85; }
+  const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#0b1230'); bg.addColorStop(1, '#070a14');
+  ctx.fillStyle = bg; ctx.fillRect(-20, -20, W+40, H+40);
+  ctx.strokeStyle = '#ffffff08'; ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  if (lvl) {
+    for (const [x, y, w, h] of lvl.plats) {
+      ctx.fillStyle = '#141c3a'; ctx.fillRect(x, y, w, h);
+      ctx.save(); ctx.shadowColor = '#4af'; ctx.shadowBlur = 10; ctx.fillStyle = '#4af'; ctx.fillRect(x, y, w, 3); ctx.restore();
+    }
+    for (const [x, y, w, h, fl] of (lvl.haz || [])) {
+      ctx.save(); ctx.shadowColor = '#f35'; ctx.shadowBlur = 12; ctx.fillStyle = '#f35';
+      const n = Math.max(1, Math.round(w / 12)), sw = w / n, by = fl ? y : y + h, ty = fl ? y + h : y;
+      for (let i = 0; i < n; i++) { ctx.beginPath(); ctx.moveTo(x + i*sw, by); ctx.lineTo(x + i*sw + sw/2, ty); ctx.lineTo(x + (i+1)*sw, by); ctx.fill(); }
+      ctx.restore();
+    }
+    for (const [x, y, w] of (lvl.ice || [])) {
+      ctx.save(); ctx.shadowColor = '#9ef'; ctx.shadowBlur = 12; ctx.fillStyle = '#bff'; ctx.fillRect(x, y, w, 5);
+      ctx.globalAlpha = .6; ctx.fillStyle = '#fff';
+      for (let i = 0; i < w; i += 46) ctx.fillRect(x + i + 8, y + 1, 14, 1);
+      ctx.restore();
+    }
+    for (const [x, y, w, dir] of (lvl.belts || [])) {
+      ctx.save(); ctx.shadowColor = '#fb4'; ctx.shadowBlur = 10; ctx.fillStyle = '#fb4'; ctx.fillRect(x, y, w, 5);
+      ctx.fillStyle = '#2a1c08'; const o = ((t * dir * 0.8) % 24 + 24) % 24;
+      for (let cx = x - 24 + o; cx < x + w; cx += 24) {
+        const x0 = Math.max(x, cx), x1 = Math.min(x + w, cx + 8); if (x1 > x0) ctx.fillRect(x0, y + 1, x1 - x0, 3);
+      }
+      ctx.restore();
+    }
+    for (const m of movers) {
+      ctx.save(); ctx.fillStyle = '#17304a'; ctx.fillRect(m.x, m.y, m.w, m.h);
+      ctx.shadowColor = '#5f9'; ctx.shadowBlur = 10; ctx.fillStyle = '#5f9'; ctx.fillRect(m.x, m.y, m.w, 3); ctx.restore();
+    }
+    for (const z of sensors) {
+      const c = pc[z.id - 1]; ctx.save(); ctx.shadowColor = c; ctx.shadowBlur = z.on ? 18 : 6; ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = 1.5;
+      ctx.globalAlpha = z.on ? .3 : .08; ctx.fillRect(z.x, z.y, z.w, z.h); ctx.globalAlpha = z.on ? .9 : .45; ctx.setLineDash([6, 5]); ctx.lineDashOffset = t / 2;
+      ctx.strokeRect(z.x + .5, z.y + .5, z.w - 1, z.h - 1); ctx.restore();
+    }
+    for (const c of cutters) {
+      ctx.save(); ctx.shadowColor = '#f35'; ctx.shadowBlur = 14 + 6 * Math.sin(t / 5);
+      if (c.dx === 0 && c.dy > 0) { ctx.strokeStyle = '#f354'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(c.cx + c.w/2, 0); ctx.lineTo(c.cx + c.w/2, c.cy); ctx.stroke(); }
+      ctx.fillStyle = '#f35'; ctx.globalAlpha = .55 + .25 * Math.sin(t / 4); ctx.fillRect(c.cx, c.cy, c.w, c.h);
+      ctx.globalAlpha = 1; ctx.fillStyle = '#fff'; ctx.fillRect(c.cx + c.w/2 - 1, c.cy, 2, c.h); ctx.restore();
+    }
+    for (const c of crumbs) {
+      ctx.save();
+      if (c.gone) { ctx.globalAlpha = .25; ctx.strokeStyle = '#da8'; ctx.setLineDash([4, 4]); ctx.strokeRect(c.x + .5, c.y + .5, c.w - 1, c.h - 1); }
+      else {
+        const jx = c.tm > 0 ? (Math.random() - .5) * 2.5 : 0, jy = c.tm > 0 ? (Math.random() - .5) * 2 : 0;
+        ctx.globalAlpha = c.tm > 0 ? 1 - c.tm / 120 : 1; ctx.fillStyle = '#2a2230'; ctx.fillRect(c.x + jx, c.y + jy, c.w, c.h);
+        ctx.shadowColor = '#da8'; ctx.shadowBlur = 8; ctx.fillStyle = '#da8'; ctx.fillRect(c.x + jx, c.y + jy, c.w, 3);
+        ctx.shadowBlur = 0; ctx.strokeStyle = '#0006'; ctx.lineWidth = 1; ctx.beginPath();
+        ctx.moveTo(c.x + jx + c.w*.3, c.y + jy + 3); ctx.lineTo(c.x + jx + c.w*.4, c.y + jy + c.h);
+        ctx.moveTo(c.x + jx + c.w*.7, c.y + jy + 3); ctx.lineTo(c.x + jx + c.w*.6, c.y + jy + c.h); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    const f = Math.min(1, hold / 45);
+    drawExit(lvl.exitA, '#5aa8ff', 'A', f); drawExit(lvl.exitB, '#ffa94d', 'B', f);
+    for (const [x,y,w,h] of (lvl.drafts||[])) {
+      ctx.save(); ctx.fillStyle = '#5ef'; ctx.globalAlpha = .07; ctx.fillRect(x, y, w, h); ctx.globalAlpha = .5; ctx.strokeStyle = '#5ef'; ctx.lineWidth = 2;
+      for (let i = 0; i < 6; i++) { const ax = x + (i+.5)*w/6, ay = y + h - ((t*2 + i*53) % h);
+        ctx.beginPath(); ctx.moveTo(ax-4, ay+6); ctx.lineTo(ax, ay); ctx.lineTo(ax+4, ay+6); ctx.stroke(); }
+      ctx.restore();
+    }
+    for (const [x,y,w] of (lvl.pads||[])) {
+      ctx.save(); ctx.shadowColor = '#4f8'; ctx.shadowBlur = 14; ctx.fillStyle = '#4f8'; ctx.fillRect(x, y+4, w, 4);
+      ctx.beginPath(); ctx.moveTo(x+6, y+4); ctx.lineTo(x+w/2, y-2 - 2*Math.sin(t/6)); ctx.lineTo(x+w-6, y+4); ctx.fill(); ctx.restore();
+    }
+    for (const d of doors) {
+      const c = pc[d.id-1]; ctx.save(); ctx.shadowColor = c; ctx.shadowBlur = 12; ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = 2;
+      if (d.open) { ctx.globalAlpha = .35; ctx.setLineDash([5,5]); ctx.strokeRect(d.x, d.y, d.w, d.h); }
+      else { ctx.globalAlpha = .85; ctx.fillRect(d.x, d.y, d.w, d.h); }
+      if (d.bridge && d.open) { ctx.globalAlpha = .6; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center'; ctx.fillText('BRIDGE', d.x + d.w/2, d.y - 8); }
+      ctx.restore();
+    }
+    for (const p of plates) {
+      const c = pc[p.id-1]; ctx.save(); ctx.shadowColor = c; ctx.shadowBlur = p.on ? 18 : 6; ctx.fillStyle = c;
+      ctx.globalAlpha = p.on ? 1 : .55; ctx.fillRect(p.x, p.y + (p.on ? 3 : 0), p.w, p.h - (p.on ? 3 : 0));
+      if (p.heavy) { ctx.globalAlpha = 1; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center'; ctx.fillText('▼ HEAVY', p.x + p.w/2, p.y - 6); }
+      if (p.timer) { ctx.globalAlpha = 1; ctx.fillRect(p.x, p.y - 9, p.w * p.t / p.timer, 3); ctx.globalAlpha = .3; ctx.strokeStyle = c; ctx.lineWidth = 1; ctx.strokeRect(p.x + .5, p.y - 9.5, p.w, 3); }
+      ctx.restore();
+    }
+    for (const c of crates) {
+      const { x, y } = c.position, h = c.s / 2;
+      ctx.save(); ctx.translate(x, y); ctx.shadowColor = '#fc6'; ctx.shadowBlur = 8; ctx.fillStyle = '#2b1d0a'; ctx.fillRect(-h, -h, c.s, c.s);
+      ctx.strokeStyle = '#fc6'; ctx.lineWidth = 2; ctx.strokeRect(-h + 1, -h + 1, c.s - 2, c.s - 2); ctx.shadowBlur = 0; ctx.globalAlpha = .6;
+      ctx.beginPath(); ctx.moveTo(-h + 4, -h + 4); ctx.lineTo(h - 4, h - 4); ctx.moveTo(h - 4, -h + 4); ctx.lineTo(-h + 4, h - 4); ctx.stroke(); ctx.restore();
+    }
+    drawPulley(); drawTether();
+    drawBot(A, '#5aa8ff', 'A', active === 0); drawBot(B, '#ffa94d', 'B', active === 1);
+    ctx.fillStyle = '#cfe8ff'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'left';
+    ctx.fillText(lvl.name, 18, 28);
+    ctx.fillStyle = '#7f9cc0'; ctx.font = '12px monospace';
+    ctx.fillText(lvl.hint, 18, 48);
+    ctx.textAlign = 'right';
+    ctx.fillText(mode === 'solo' ? 'Tab: swap robot · R: restart' : 'A: WASD · B: arrows · R: restart', W - 18, 28);
+  }
+  ctx.restore();
+}
+
+// ---------- Loop & UI ----------
+function frame(ts) {
+  acc += Math.min(50, ts - (last || ts)); last = ts;
+  while (acc >= 1000 / 60) { if (state === 'play') step(); acc -= 1000 / 60; }
+  draw(); requestAnimationFrame(frame);
+}
+function show(id, on) { document.getElementById(id).classList.toggle('hide', !on); }
+function start(m, i = 0) { mode = m; load(i); state = 'play'; show('menu', false); show('done', false); }
+LEVELS.forEach((l, i) => {
+  const b = document.createElement('button'); b.className = 'sm'; b.textContent = i + 1; b.title = l.name;
+  b.onclick = () => start(mode, i); document.getElementById('lv').appendChild(b);
+});
+document.getElementById('solo').onclick = () => start('solo');
+document.getElementById('coop').onclick = () => start('coop');
+document.getElementById('next').onclick = () => {
+  show('done', false);
+  if (lvlIdx === LEVELS.length - 1) { state = 'menu'; show('menu', true); } else { load(lvlIdx + 1); state = 'play'; }
+};
+if (typeof Matter !== 'undefined') { load(0); requestAnimationFrame(frame); }
+</script>
+</body>
+</html>

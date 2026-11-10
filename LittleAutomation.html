@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Little Automation</title>
+<style>
+:root{--bg:#e6edf1;--panel:#fbfcfd;--ink:#1d2b3a;--mute:#6b7b8c;--line:#cfd9e0;--acc:#1f8a87;--acc2:#16706e}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 "Avenir Next","Segoe UI",system-ui,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+h1{font-size:20px;margin:0 10px 0 0;letter-spacing:.2px}
+button,select{font:inherit;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px 11px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--acc)}
+button:disabled{opacity:.45;cursor:default}
+button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+button.primary{background:var(--acc);border-color:var(--acc2);color:#fff;font-weight:600;min-width:84px}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.sp{flex:1}
+.grp{display:flex;gap:4px}
+main{display:flex;flex-wrap:wrap;gap:14px;padding:14px;align-items:flex-start;justify-content:center}
+.stage{flex:1 1 560px;max-width:880px;min-width:0}
+canvas{width:100%;height:auto;display:block;background:#f6f9fb;border:1px solid var(--line);border-radius:10px;touch-action:none;cursor:crosshair}
+aside{flex:0 0 280px;display:flex;flex-direction:column;gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+.card h2{font-size:16px;margin:0 0 4px}
+.hint{color:var(--mute);margin:0}
+.obj{margin-top:9px}
+.obj .t{display:flex;justify-content:space-between;font-size:14px}
+.bar{height:8px;background:#e3eaef;border-radius:5px;overflow:hidden;margin-top:3px}
+.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .2s}
+.obj.ok .bar i{background:#3aa655}
+#palette{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#palette button{text-align:left;display:flex;gap:7px;align-items:center}
+.sw{width:14px;height:14px;border-radius:4px;flex:none}
+.keys{font-size:13px;color:var(--mute);margin:8px 0 0}
+#win{display:none;border-color:#3aa655;background:#effaf1}
+#win.show{display:block}
+</style>
+</head>
+<body>
+<header>
+  <h1>Little Automation</h1>
+  <select id="lvl" aria-label="Level"></select>
+  <button id="play" class="primary">Play</button>
+  <button id="reset">Reset</button>
+  <div class="grp" id="speeds">
+    <button data-s="1">1x</button><button data-s="2">2x</button><button data-s="4">4x</button>
+  </div>
+  <span class="sp"></span>
+  <button id="clear">Clear layout</button>
+</header>
+<main>
+  <div class="stage"><canvas id="cv"></canvas></div>
+  <aside>
+    <div class="card">
+      <h2 id="ltitle"></h2>
+      <p class="hint" id="lhint"></p>
+      <div id="objs"></div>
+    </div>
+    <div class="card" id="win">
+      <h2>Level complete</h2>
+      <p class="hint" id="wintext"></p>
+      <button id="next" class="primary" style="margin-top:8px">Next level</button>
+    </div>
+    <div class="card" id="reccard">
+      <h2>Recipes</h2>
+      <p class="hint" id="rec"></p>
+    </div>
+    <div class="card">
+      <h2>Build</h2>
+      <div id="palette"></div>
+      <p class="keys">W A S D set direction (up, left, down, right), even on a machine you hover. Drag to lay conveyors. Right-click erases. Space plays or pauses. Esc cancels a held machine. C sets a sorter's filter. A dark dot marks a fixed machine.</p>
+    </div>
+  </aside>
+</main>
+
+<script>
+'use strict';
+/* ============================================================
+   LITTLE AUTOMATION
+   Extend the game by editing the registries below:
+   RES (resources), RECIPES (smelter), MACHINES, LEVELS.
+   ============================================================ */
+const CELL = 48, BASE_MS = 400, KEY = 'littleAutomation.v2';
+const DX = [1, 0, -1, 0], DY = [0, 1, 0, -1];   // dir: 0=right 1=down 2=left 3=up
+
+/* ---------- Resources ---------- */
+const RES = {
+  ironOre:     { name: 'Iron ore',     color: '#7f8fa6', shape: 'dot' },
+  copperOre:   { name: 'Copper ore',   color: '#d9822b', shape: 'dot' },
+  ironIngot:   { name: 'Iron ingot',   color: '#aebdd0', shape: 'bar' },
+  copperIngot: { name: 'Copper ingot', color: '#f0a65a', shape: 'bar' },
+  gear:        { name: 'Gear',         color: '#5d6b7d', shape: 'sq' },
+  circuit:     { name: 'Circuit',      color: '#3fae6a', shape: 'sq' },
+  coal:        { name: 'Coal',         color: '#3a3f47', shape: 'dot' },
+  plate:       { name: 'Iron plate',   color: '#6f8aa8', shape: 'sq' },
+  wire:        { name: 'Copper wire',  color: '#e2602f', shape: 'sq' },
+  steel:       { name: 'Steel',        color: '#34495e', shape: 'bar' },
+  motor:       { name: 'Motor',        color: '#8e44ad', shape: 'sq' },
+  battery:     { name: 'Battery',      color: '#d4b106', shape: 'sq' },
+  sand:        { name: 'Sand',         color: '#d8c36a', shape: 'dot' },
+  glass:       { name: 'Glass',        color: '#6fcbe6', shape: 'sq' },
+  lamp:        { name: 'Lamp',         color: '#ffc928', shape: 'sq' },
+  solar:       { name: 'Solar panel',  color: '#2c5fbf', shape: 'sq' }
+};
+const PRESS = { ironIngot: 'plate', copperIngot: 'wire' };
+const RECIPES = { ironOre: 'ironIngot', copperOre: 'copperIngot', sand: 'glass' };   // smelter input -> output
+const ASSEMBLE = [   // assembler recipes: inputs -> output
+  { in: { ironIngot: 2 }, out: 'gear' },
+  { in: { gear: 1, copperIngot: 2 }, out: 'circuit' },
+  { in: { plate: 2, coal: 1 }, out: 'steel' },
+  { in: { gear: 1, wire: 2 }, out: 'motor' },
+  { in: { plate: 1, wire: 1, coal: 1 }, out: 'battery' },
+  { in: { glass: 1, wire: 1 }, out: 'lamp' },
+  { in: { glass: 2, circuit: 1 }, out: 'solar' }
+];
+const recs = () => { const A = LEVELS[li].asm || ['gear', 'circuit']; return ASSEMBLE.filter(r => A.includes(r.out)); };
+
+/* ---------- Machines ----------
+   dir:true      -> has an output direction
+   accept(c,it)  -> can this cell take item `it` right now?
+   put(c,it,d)   -> receive item (d = direction it travelled)
+   tick(c,x,y)   -> per-tick internal work; set c.item to emit an item           */
+const MACHINES = {
+  miner: {
+    name: 'Miner', key: '1', color: '#e8a93a', label: 'M', dir: true, needsOre: true,
+    accept: () => false,
+    tick(c, x, y) { if (c.item) return; if (++c.prog >= 2) { c.prog = 0; c.item = oreMap[x + ',' + y]; } }
+  },
+  conveyor: {
+    name: 'Conveyor', key: '2', color: '#5b6b7d', dir: true,
+    accept: c => !c.item,
+    put(c, it, d) { c.item = it; c.mv = sim.tick; c.slide = d; }
+  },
+  smelter: {
+    name: 'Smelter', key: '3', color: '#c8453d', label: 'S', dir: true,
+    accept: (c, it) => RECIPES[it] && c.inp.length < 2,
+    put(c, it) { c.inp.push(it); },
+    tick(c) { if (c.item || !c.inp.length) return; if (++c.prog >= 4) { c.prog = 0; c.item = RECIPES[c.inp.shift()]; } }
+  },
+  storage: {
+    name: 'Storage', key: '4', color: '#2f9e6b', label: 'ST',
+    accept: () => true,
+    put(c, it) { sim.stored[it] = (sim.stored[it] || 0) + 1; }
+  },
+  splitter: {   // sends items alternately to every side except the one they came from
+    name: 'Splitter', key: '5', color: '#3b82c4', label: 'Y', belt: true,
+    accept: c => !c.item,
+    put(c, it, d) { c.item = it; c.mv = sim.tick; c.slide = d; c.from = d; },
+    outs: c => [0, 1, 2, 3].filter(d => d !== (c.from + 2) % 4)
+  },
+  sorter: {     // matching items go straight, everything else goes out the sides
+    name: 'Sorter', key: '6', color: '#b9558f', label: 'F', dir: true, belt: true, cfg: true,
+    accept: c => !c.item,
+    put(c, it, d) { c.item = it; c.mv = sim.tick; c.slide = d; },
+    outs: c => c.item === c.f ? [c.dir] : [(c.dir + 1) % 4, (c.dir + 3) % 4]
+  },
+  junction: {   // lets two belts cross: items keep going straight
+    name: 'Junction', key: '7', color: '#a8873a', label: '+', belt: true,
+    accept: c => !c.item,
+    put(c, it, d) { c.item = it; c.mv = sim.tick; c.slide = d; c.from = d; },
+    outs: c => [c.from]
+  },
+  assembler: {
+    name: 'Assembler', key: '8', color: '#5b5bd6', label: 'A', dir: true,
+    accept: (c, it) => (c.inv[it] || 0) < 2 && recs().some(r => it in r.in),
+    put(c, it) { c.inv[it] = (c.inv[it] || 0) + 1; },
+    tick(c) {
+      if (c.item) return;
+      const r = recs().find(r => Object.entries(r.in).every(([k, n]) => (c.inv[k] || 0) >= n));
+      if (!r) { c.prog = 0; return; }
+      if (++c.prog >= 5) { c.prog = 0; for (const k in r.in) c.inv[k] -= r.in[k]; c.item = r.out; }
+    }
+  },
+  crusher: {    // doubles ore: every ore in comes out twice
+    name: 'Crusher', key: 'u', color: '#9c6644', label: 'D', dir: true,
+    accept: (c, it) => /Ore$|^sand$|^coal$/.test(it) && c.inp.length < 2,
+    put(c, it) { c.inp.push(it); },
+    tick(c) { if (c.item || !c.inp.length) return; if (++c.prog >= 3) { c.prog = 0; c.item = c.inp[0]; c.inv.x = (c.inv.x || 0) + 1; if (c.inv.x >= 2) { c.inv.x = 0; c.inp.shift(); } } }
+  },
+  buffer: {     // holds up to 4 items so belts keep moving
+    name: 'Buffer', key: 'v', color: '#4d908e', label: 'U', dir: true,
+    accept: c => c.inp.length < 4,
+    put(c, it) { c.inp.push(it); },
+    tick(c) { if (!c.item && c.inp.length) c.item = c.inp.shift(); }
+  },
+  press: {
+    name: 'Press', key: 'p', color: '#8e6bbf', label: 'P', dir: true,
+    accept: (c, it) => PRESS[it] && c.inp.length < 2,
+    put(c, it) { c.inp.push(it); },
+    tick(c) { if (c.item || !c.inp.length) return; if (++c.prog >= 3) { c.prog = 0; c.item = PRESS[c.inp.shift()]; } }
+  },
+  overflow: {   // straight ahead first; out the sides only when the front is blocked
+    name: 'Overflow', key: 'o', color: '#2a9d8f', label: 'O', dir: true, belt: true, prio: true,
+    accept: c => !c.item,
+    put(c, it, d) { c.item = it; c.mv = sim.tick; c.slide = d; },
+    outs: c => [c.dir, (c.dir + 1) % 4, (c.dir + 3) % 4]
+  },
+  bridge: {     // jumps over up to 3 tiles to the next bridge facing the same way
+    name: 'Bridge', key: 'b', color: '#6d6875', label: 'B', dir: true, belt: true,
+    accept: c => !c.item,
+    put(c, it, d) { c.item = it; c.mv = sim.tick; c.slide = d; c.fb = false; },
+    outs: c => [c.dir]
+  },
+  trash: {
+    name: 'Trash', key: '9', color: '#7b8794', label: 'X',
+    accept: () => true, put() {}
+  }
+};
+
+/* ---------- Levels ----------
+   ore: [x, y, resource] tiles. goals: resources that must reach storage. */
+const O = (r, ...p) => p.map(([x, y]) => [x, y, r]);                       // ore tiles
+const RK = (x, a, b) => Array.from({ length: b - a + 1 }, (_, i) => [x, a + i]);   // vertical rocks
+// Fixed machines ([x, y, type, dir]) are pre-placed and cannot be changed.
+const FEED = [[1, 2, 'miner', 0], [2, 2, 'conveyor', 1], [2, 3, 'conveyor', 1], [1, 4, 'miner', 0], [2, 4, 'conveyor', 0]];
+const MIXED = [...O('ironOre', [1, 2]), ...O('copperOre', [1, 4])];
+const LEVELS0 = [
+  { id: 'a1', title: '1. First ore', w: 10, h: 6, tools: ['miner', 'conveyor', 'storage'],
+    ore: O('ironOre', [1, 2], [1, 3]), goals: [{ res: 'ironOre', n: 10 }],
+    hint: 'Put a miner on an ore tile, run a conveyor from it, and end the line in a storage. Press Play.' },
+  { id: 'a2', title: '2. Hot stuff', w: 11, h: 6, tools: ['miner', 'conveyor', 'smelter', 'storage'],
+    ore: O('ironOre', [1, 2], [1, 3]), goals: [{ res: 'ironIngot', n: 10 }],
+    hint: 'A smelter turns ore into ingots. Machines output in the direction of their arrow; press R to rotate before placing.' },
+  { id: 'a3', title: '3. Split it', w: 12, h: 7, tools: ['miner', 'conveyor', 'splitter', 'smelter', 'storage'],
+    ore: O('ironOre', [1, 3]), goals: [{ res: 'ironIngot', n: 40 }],
+    hint: 'One ore tile, but a miner is twice as fast as a smelter. A splitter shares items between outputs so two smelters can work at once.' },
+  { id: 'a4', title: '4. Two metals', w: 13, h: 7, tools: ['miner', 'conveyor', 'smelter', 'storage'],
+    ore: [...O('ironOre', [1, 1], [1, 2]), ...O('copperOre', [11, 4], [11, 5])],
+    goals: [{ res: 'ironIngot', n: 10 }, { res: 'copperIngot', n: 10 }],
+    hint: 'Iron on the left, copper on the right. Smelters work with either ore, and one storage takes both.' },
+  { id: 'a5', title: '5. Cogs', w: 12, h: 6, tools: ['miner', 'conveyor', 'smelter', 'assembler', 'storage'],
+    ore: O('ironOre', [1, 2], [1, 3], [1, 4]), goals: [{ res: 'gear', n: 8 }],
+    hint: 'An assembler combines ingredients into a new item. Check the recipes card, then feed it ingots.' },
+  { id: 'a6', title: '6. Mixed feed', w: 13, h: 7, tools: ['conveyor', 'smelter', 'sorter', 'assembler', 'trash', 'storage'],
+    ore: MIXED, pre: FEED, goals: [{ res: 'gear', n: 10 }],
+    hint: 'Fixed miners (dark dot) send iron and copper down one belt. An assembler jams on items it cannot use. Sort the stream with a sorter (set its filter with the Config tool) and bin the junk in the trash.' },
+  { id: 'a7', title: '7. Circuits', w: 14, h: 8, tools: ['miner', 'conveyor', 'smelter', 'assembler', 'storage'],
+    ore: [...O('ironOre', [1, 2], [1, 3]), ...O('copperOre', [1, 5], [1, 6])], goals: [{ res: 'circuit', n: 6 }],
+    hint: 'Circuits need a gear and two copper ingots. Make gears in one assembler and feed them into another.' },
+  { id: 'a8', title: '8. Crossing', w: 13, h: 7, tools: ['miner', 'conveyor', 'smelter', 'junction', 'storage'],
+    ore: [...O('ironOre', [1, 3]), ...O('copperOre', [6, 0])],
+    pre: [[6, 0, 'miner', 1], [6, 1, 'conveyor', 1], [6, 2, 'conveyor', 1], [6, 4, 'conveyor', 1], [6, 5, 'conveyor', 1], [6, 6, 'storage', 0]],
+    goals: [{ res: 'ironIngot', n: 10 }, { res: 'copperOre', n: 10 }],
+    hint: 'A fixed belt blocks the way. Fill the gap in it with a junction so both lines cross without mixing.' },
+  { id: 'a9', title: '9. Rocky road', w: 14, h: 8, tools: ['miner', 'conveyor', 'smelter', 'storage'],
+    ore: O('ironOre', [1, 1], [1, 2]), rocks: [...RK(5, 0, 5), ...RK(9, 2, 7)], goals: [{ res: 'ironIngot', n: 20 }],
+    hint: 'Rocks cannot be built on. Wind your line through the gaps.' },
+  { id: 'a10', title: '10. Sorting hat', w: 13, h: 8, tools: ['conveyor', 'smelter', 'sorter', 'assembler', 'storage'],
+    ore: MIXED, pre: FEED, goals: [{ res: 'gear', n: 6 }, { res: 'copperIngot', n: 12 }],
+    hint: 'This time the copper is wanted too. Split the smelted stream: iron to the assembler, copper to storage.' },
+  { id: 'a11', title: '11. Big order', w: 14, h: 8, tools: ['miner', 'conveyor', 'splitter', 'smelter', 'storage'],
+    ore: [...O('ironOre', [1, 3]), ...O('copperOre', [12, 4])],
+    goals: [{ res: 'ironIngot', n: 30 }, { res: 'copperIngot', n: 20 }],
+    hint: 'Only one ore tile of each metal. Make every miner count with splitters and several smelters.' },
+  { id: 'a12', title: 'Full factory', w: 16, h: 9, tools: ['miner', 'conveyor', 'splitter', 'smelter', 'assembler', 'storage'],
+    ore: [...O('ironOre', [1, 1], [1, 2], [1, 3], [1, 4]), ...O('copperOre', [1, 6], [1, 7])],
+    rocks: RK(8, 2, 6), goals: [{ res: 'circuit', n: 8 }, { res: 'gear', n: 6 }],
+    hint: 'Build a line for circuits and one for spare gears. Splitters help share the iron.' },
+  { id: 'b1', title: 'Pressing matters', w: 11, h: 6, tools: ['miner', 'conveyor', 'smelter', 'press', 'storage'],
+    ore: O('ironOre', [1, 2], [1, 3]), goals: [{ res: 'plate', n: 10 }],
+    hint: 'A press flattens ingots into plates (or draws copper into wire). Smelt first, then press.' },
+  { id: 'b2', title: 'Overflow', w: 12, h: 7, tools: ['miner', 'conveyor', 'overflow', 'smelter', 'storage'],
+    ore: O('ironOre', [1, 3]), goals: [{ res: 'ironIngot', n: 12 }, { res: 'ironOre', n: 12 }],
+    hint: 'An overflow gate sends items straight ahead, and out its sides only when the front is blocked. Put one before the smelter and catch the spare ore.' },
+  { id: 'b3', title: 'Over the wall', w: 12, h: 7, tools: ['miner', 'conveyor', 'bridge', 'smelter', 'storage'],
+    ore: O('ironOre', [1, 3]), rocks: [...RK(6, 0, 6), ...RK(7, 0, 6)], goals: [{ res: 'ironIngot', n: 10 }],
+    hint: 'Bridges jump over up to 3 tiles. Place one facing the wall and another facing the same way on the far side.' },
+  { id: 'b4', title: 'Wire and plate', w: 12, h: 7, tools: ['miner', 'conveyor', 'smelter', 'press', 'storage'],
+    ore: [...O('ironOre', [1, 1], [1, 2]), ...O('copperOre', [1, 4], [1, 5])], goals: [{ res: 'plate', n: 8 }, { res: 'wire', n: 8 }],
+    hint: 'Two metals, two presses. Keep the lines apart.' },
+  { id: 'b5', title: 'Motors', w: 14, h: 8, tools: ['miner', 'conveyor', 'smelter', 'press', 'assembler', 'storage'], asm: ['gear', 'motor'],
+    ore: [...O('ironOre', [1, 1], [1, 2]), ...O('copperOre', [1, 5], [1, 6])], goals: [{ res: 'motor', n: 4 }],
+    hint: 'A motor needs a gear and 2 wire. Make gears in one assembler, wire in a press, and combine them in another assembler.' },
+  { id: 'b6', title: 'Steel', w: 13, h: 8, tools: ['miner', 'conveyor', 'smelter', 'press', 'assembler', 'storage'], asm: ['steel'],
+    ore: [...O('ironOre', [1, 2], [1, 3]), ...O('coal', [1, 6])], goals: [{ res: 'steel', n: 5 }],
+    hint: 'Steel is 2 plates and 1 coal. Coal needs no smelting; send it straight to the assembler.' },
+  { id: 'b7', title: 'Batteries', w: 15, h: 9, tools: ['miner', 'conveyor', 'smelter', 'press', 'assembler', 'storage'], asm: ['battery'],
+    ore: [...O('ironOre', [1, 1], [1, 2]), ...O('copperOre', [1, 4], [1, 5]), ...O('coal', [1, 7])], goals: [{ res: 'battery', n: 4 }],
+    hint: 'A battery is 1 plate, 1 wire and 1 coal. Three belts, one assembler.' },
+  { id: 'b10', title: 'Coal or ore?', w: 14, h: 8, tools: ['conveyor', 'smelter', 'press', 'sorter', 'assembler', 'storage'], asm: ['steel'],
+    ore: [...O('ironOre', [1, 2]), ...O('coal', [1, 4])], pre: FEED, goals: [{ res: 'steel', n: 4 }],
+    hint: 'The fixed feed mixes iron ore and coal on one belt. Use a sorter (Config sets its filter) to pull the coal out.' },
+  { id: 'b9', title: 'Bridge and cross', w: 14, h: 8, tools: ['miner', 'conveyor', 'junction', 'bridge', 'smelter', 'storage'],
+    ore: [...O('ironOre', [1, 3]), ...O('copperOre', [3, 0])], rocks: RK(8, 0, 7),
+    pre: [[3, 0, 'miner', 1], [3, 1, 'conveyor', 1], [3, 2, 'conveyor', 1], [3, 4, 'conveyor', 1], [3, 5, 'conveyor', 1], [3, 6, 'storage', 0]],
+    goals: [{ res: 'ironIngot', n: 10 }, { res: 'copperOre', n: 10 }],
+    hint: 'A fixed belt on one side, a rock wall on the other. Cross the belt with a junction, then bridge the wall.' },
+  { id: 'b8', title: 'Overflow chain', w: 15, h: 8, tools: ['miner', 'conveyor', 'splitter', 'overflow', 'smelter', 'press', 'storage'],
+    ore: O('ironOre', [1, 2], [1, 5]), goals: [{ res: 'ironIngot', n: 20 }, { res: 'plate', n: 12 }],
+    hint: 'Fill the ingot order first, and let overflow gates send the extra to the presses.' },
+  { id: 'b11', title: 'Grand factory', w: 17, h: 10, tools: ['miner', 'conveyor', 'splitter', 'junction', 'smelter', 'press', 'assembler', 'storage'], asm: ['gear', 'motor', 'battery'],
+    ore: [...O('ironOre', [1, 1], [1, 2], [1, 3]), ...O('copperOre', [1, 6], [1, 7]), ...O('coal', [1, 9])], rocks: RK(9, 3, 6),
+    goals: [{ res: 'motor', n: 3 }, { res: 'battery', n: 3 }],
+    hint: 'Motors and batteries from three ores. Plan your belts before you build.' },
+  { id: 'c1', title: 'Sand to glass', w: 11, h: 6, tools: ['miner', 'conveyor', 'smelter', 'storage'],
+    ore: O('sand', [1, 2], [1, 3]), goals: [{ res: 'glass', n: 10 }],
+    hint: 'Smelters melt sand into glass too.' },
+  { id: 'c2', title: 'Lamps', w: 13, h: 7, tools: ['miner', 'conveyor', 'smelter', 'press', 'assembler', 'storage'], asm: ['lamp'],
+    ore: [...O('sand', [1, 1], [1, 2]), ...O('copperOre', [1, 4], [1, 5])], goals: [{ res: 'lamp', n: 5 }],
+    hint: 'A lamp is a glass and a wire. Melt the sand, draw the wire, assemble.' },
+  { id: 'c3', title: 'Double up', w: 13, h: 7, tools: ['miner', 'conveyor', 'crusher', 'splitter', 'smelter', 'storage'],
+    ore: O('ironOre', [1, 3]), goals: [{ res: 'ironIngot', n: 30 }],
+    hint: 'A crusher sends every ore out twice. One ore tile can now feed many smelters.' },
+  { id: 'c4', title: 'Solar panels', w: 16, h: 9, tools: ['miner', 'conveyor', 'splitter', 'smelter', 'assembler', 'storage'], asm: ['gear', 'circuit', 'solar'],
+    ore: [...O('ironOre', [1, 1], [1, 2], [1, 3]), ...O('copperOre', [1, 5], [1, 6]), ...O('sand', [1, 8])], goals: [{ res: 'solar', n: 3 }],
+    hint: 'A panel is 2 glass and a circuit, and a circuit needs a gear and 2 copper ingots.' },
+  { id: 'c5', title: 'Sand and coal', w: 13, h: 7, tools: ['conveyor', 'smelter', 'sorter', 'storage'],
+    ore: [...O('sand', [1, 2]), ...O('coal', [1, 4])], pre: FEED, goals: [{ res: 'glass', n: 8 }, { res: 'coal', n: 8 }],
+    hint: 'Sand and coal share one belt. Sort them: sand to a smelter, coal to storage.' },
+  { id: 'c6', title: 'Triple threat', w: 15, h: 8, tools: ['miner', 'conveyor', 'crusher', 'splitter', 'overflow', 'smelter', 'press', 'storage'],
+    ore: O('ironOre', [1, 3]), goals: [{ res: 'ironIngot', n: 12 }, { res: 'plate', n: 20 }],
+    hint: 'One ore tile, a crusher, and plenty of mouths. Overflow gates fill the ingot order first.' },
+  { id: 'c7', title: 'Bridge relay', w: 15, h: 8, tools: ['miner', 'conveyor', 'bridge', 'smelter', 'press', 'assembler', 'storage'], asm: ['lamp'],
+    ore: [...O('sand', [1, 1]), ...O('copperOre', [1, 6])], rocks: [...RK(6, 0, 7), ...RK(7, 0, 7), ...RK(8, 0, 7)], goals: [{ res: 'lamp', n: 5 }],
+    hint: 'The wall is three tiles thick, the longest jump a bridge can make. Put the bridges on either side of it.' },
+  { id: 'c9', title: 'Mega factory', w: 18, h: 10,
+    tools: ['miner', 'conveyor', 'splitter', 'junction', 'overflow', 'bridge', 'crusher', 'buffer', 'smelter', 'press', 'assembler', 'storage'], asm: ['gear', 'circuit', 'battery', 'lamp', 'solar'],
+    ore: [...O('ironOre', [1, 1], [1, 2], [1, 3]), ...O('copperOre', [1, 5], [1, 6]), ...O('sand', [1, 8]), ...O('coal', [1, 9])], rocks: RK(9, 2, 7),
+    goals: [{ res: 'lamp', n: 4 }, { res: 'battery', n: 3 }, { res: 'solar', n: 2 }],
+    hint: 'Everything you have learned. A buffer holds 4 items so a belt keeps moving while a slow machine catches up.' }
+];
+const ORDER = 'a1 a2 a3 b2 a4 a5 b1 a6 a7 b4 b5 a8 a9 b3 c1 c2 a10 a11 c3 b6 b7 c5 b10 b9 c6 c7 b8 a12 c4 b11 c9'.split(' ');
+const LEVELS = ORDER.map(id => LEVELS0.find(l => l.id === id));
+({ a5: ['gear'], a6: ['gear'], a10: ['gear'] });
+LEVELS.forEach((L, i) => { L.title = (i + 1) + '. ' + L.title.replace(/^\d+\.\s*/, ''); if (!L.asm) L.asm = ({ a5: ['gear'], a6: ['gear'], a10: ['gear'] })[L.id]; });
+
+/* ---------- State ---------- */
+const $ = s => document.querySelector(s);
+const cv = $('#cv'), ctx = cv.getContext('2d');
+const sim = { running: false, tick: 0, stored: {}, speed: 1, last: 0, done: false };
+let save = loadSave(), li = 0, grid = [], oreMap = {}, rockMap = {};
+let tool = 'conveyor', rot = 0, held = null, hover = null, down = false, lastCell = null;
+const level = () => ({ ...LEVELS[li], ore: oreMap });
+
+function loadSave() {
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.completed) return s; } catch (e) {}
+  return { completed: {}, layouts: {}, level: 0, speed: 1 };
+}
+function persist() { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) {} }
+function saveLayout() {
+  const out = [];
+  grid.forEach((row, y) => row.forEach((c, x) => { if (c && !c.fixed) out.push({ x, y, t: c.type, d: c.dir, f: c.f }); }));
+  save.layouts[LEVELS[li].id] = out; persist();
+}
+
+/* ---------- Grid helpers ---------- */
+const newCell = (type, dir) => ({ type, dir, item: null, prog: 0, inp: [], inv: {}, rr: 0, from: 0, f: null, fixed: false, mv: 0, slide: null });
+const inBounds = (x, y) => x >= 0 && y >= 0 && x < LEVELS[li].w && y < LEVELS[li].h;
+const canPlace = (type, x, y) => inBounds(x, y) && !rockMap[x + ',' + y] && (!MACHINES[type].needsOre || !!oreMap[x + ',' + y]);
+
+function loadLevel(i) {
+  li = i; const L = LEVELS[i]; save.level = i;
+  cv.width = L.w * CELL; cv.height = L.h * CELL;
+  oreMap = {}; L.ore.forEach(([x, y, r]) => oreMap[x + ',' + y] = r);
+  rockMap = {}; (L.rocks || []).forEach(([x, y]) => rockMap[x + ',' + y] = 1);
+  grid = Array.from({ length: L.h }, () => Array(L.w).fill(null));
+  (save.layouts[L.id] || []).forEach(o => {
+    if (MACHINES[o.t] && L.tools.includes(o.t) && canPlace(o.t, o.x, o.y)) { const c = newCell(o.t, o.d || 0); c.f = o.f || null; grid[o.y][o.x] = c; }
+  });
+  (L.pre || []).forEach(([x, y, t, d]) => { const c = newCell(t, d); c.fixed = true; grid[y][x] = c; });
+  held = null;
+  const hasCfg = L.tools.some(t => MACHINES[t].cfg);
+  if (![...L.tools, 'move', 'erase', ...(hasCfg ? ['config'] : [])].includes(tool)) tool = L.tools[0];
+  const rl = [];
+  if (L.tools.includes('smelter')) rl.push('Smelter: ' + Object.entries(RECIPES).filter(([a]) => L.ore.some(o => o[2] === a)).map(([a, b]) => RES[a].name + ' \u2192 ' + RES[b].name).join(', '));
+  if (L.tools.includes('press')) rl.push('Press: ' + Object.entries(PRESS).map(([a, b]) => RES[a].name + ' \u2192 ' + RES[b].name).join(', '));
+  if (L.tools.includes('assembler')) recs().forEach(r => rl.push('Assembler: ' + Object.entries(r.in).map(([k, n]) => n + '\u00d7 ' + RES[k].name).join(' + ') + ' \u2192 ' + RES[r.out].name));
+  $('#reccard').style.display = rl.length ? '' : 'none'; $('#rec').innerHTML = rl.join('<br>');
+  buildObjectives(); buildPalette(); buildLevelSelect(); resetSim();
+  $('#ltitle').textContent = L.title; $('#lhint').textContent = L.hint;
+}
+
+/* ---------- Simulation ---------- */
+function resetSim() {
+  sim.running = false; sim.tick = 0; sim.stored = {}; sim.done = false;
+  grid.forEach(r => r.forEach(c => { if (c) { c.item = null; c.prog = 0; c.inp = []; c.inv = {}; c.rr = 0; c.mv = 0; c.slide = null; c.fb = false; } }));
+  $('#win').classList.remove('show'); updateUI();
+}
+
+function step() {
+  sim.tick++;
+  const W = LEVELS[li].w, H = LEVELS[li].h;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const c = grid[y][x]; if (!c) continue;
+    c.slide = null;
+    const m = MACHINES[c.type]; if (m.tick) m.tick(c, x, y);
+  }
+  // Push items forward; repeat so chains of belts advance together.
+  let moved = true, n = 0;
+  while (moved && n++ < 10) {
+    moved = false;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const c = grid[y][x];
+      if (!c || !c.item || c.mv === sim.tick) continue;
+      const m = MACHINES[c.type], ds = m.outs ? m.outs(c) : (m.dir ? [c.dir] : null);
+      if (!ds) continue;
+      if (c.type === 'bridge' && !c.fb) {
+        let t = null;
+        for (let k = 2; k <= 4 && !t; k++) { const q = inBounds(x + DX[c.dir] * k, y + DY[c.dir] * k) && grid[y + DY[c.dir] * k][x + DX[c.dir] * k]; if (q && q.type === 'bridge' && q.dir === c.dir) t = q; }
+        if (t) { if (!t.item) { t.item = c.item; t.fb = true; t.mv = sim.tick; t.slide = c.dir; c.item = null; moved = true; } continue; }
+      }
+      for (let k = 0; k < ds.length; k++) {   // rotate the starting output so splitters alternate
+        const d = ds[(k + (m.prio ? 0 : c.rr)) % ds.length], tx = x + DX[d], ty = y + DY[d];
+        if (!inBounds(tx, ty)) continue;
+        const t = grid[ty][tx]; if (!t) continue;
+        if (t.type === 'conveyor' && t.dir === (d + 2) % 4) continue;   // no head-on feeding
+        const tm = MACHINES[t.type];
+        if (tm.accept(t, c.item)) { tm.put(t, c.item, d); c.item = null; c.rr++; moved = true; break; }
+      }
+    }
+  }
+  checkGoals(); updateUI();
+}
+
+function checkGoals() {
+  const L = LEVELS[li];
+  if (sim.done || !L.goals.every(g => (sim.stored[g.res] || 0) >= g.n)) return;
+  sim.done = true; sim.running = false;
+  save.completed[L.id] = true; persist(); buildLevelSelect();
+  const hasNext = li + 1 < LEVELS.length;
+  $('#wintext').textContent = 'Finished in ' + sim.tick + ' ticks. ' + (hasNext ? 'Objectives met. The next level is unlocked.' : 'Objectives met. That was the last level. Keep building as long as you like.');
+  $('#next').style.display = hasNext ? '' : 'none';
+  $('#win').classList.add('show');
+}
+
+/* ---------- UI ---------- */
+function buildLevelSelect() {
+  const s = $('#lvl'); s.innerHTML = '';
+  LEVELS.forEach((L, i) => {
+    const o = document.createElement('option'); o.value = i;
+    const locked = i > 0 && !save.completed[LEVELS[i - 1].id];
+    o.textContent = (save.completed[L.id] ? '\u2713 ' : '') + L.title + (locked ? ' (locked)' : '');
+    o.disabled = locked; s.appendChild(o);
+  });
+  s.value = li;
+}
+function buildObjectives() {
+  const box = $('#objs'); box.innerHTML = '';
+  LEVELS[li].goals.forEach((g, i) => {
+    box.insertAdjacentHTML('beforeend',
+      `<div class="obj" id="o${i}"><div class="t"><span>${RES[g.res].name}</span><span class="n"></span></div><div class="bar"><i></i></div></div>`);
+  });
+}
+function buildPalette() {
+  const p = $('#palette'); p.innerHTML = '';
+  const add = (id, name, color, key) => {
+    const b = document.createElement('button'); b.dataset.tool = id;
+    b.innerHTML = `<span class="sw" style="background:${color}"></span>${name} <small style="color:var(--mute)">${key}</small>`;
+    b.onclick = () => { setTool(id); }; p.appendChild(b);
+  };
+  LEVELS[li].tools.forEach(t => add(t, MACHINES[t].name, MACHINES[t].color, MACHINES[t].key));
+  add('move', 'Move', '#8a6fd1', 'M'); add('erase', 'Erase', '#9aa7b4', 'E');
+  if (LEVELS[li].tools.some(t => MACHINES[t].cfg)) add('config', 'Config', '#c9a227', 'C');
+  setTool(tool);
+}
+function setTool(t) {
+  if (held) cancelHeld();
+  tool = t;
+  document.querySelectorAll('#palette button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
+}
+function updateUI() {
+  $('#play').textContent = sim.running ? 'Pause' : 'Play';
+  document.querySelectorAll('#speeds button').forEach(b => b.classList.toggle('on', +b.dataset.s === sim.speed));
+  LEVELS[li].goals.forEach((g, i) => {
+    const v = Math.min(sim.stored[g.res] || 0, g.n), o = $('#o' + i);
+    o.querySelector('.n').textContent = v + ' / ' + g.n;
+    o.querySelector('i').style.width = (v / g.n * 100) + '%';
+    o.classList.toggle('ok', v >= g.n);
+  });
+}
+function togglePlay() {
+  if (sim.done) resetSim();
+  sim.running = !sim.running; sim.last = performance.now(); updateUI();
+}
+
+$('#play').onclick = togglePlay;
+$('#reset').onclick = resetSim;
+$('#clear').onclick = () => { if (confirm('Remove every machine from this level?')) { grid.forEach(r => r.fill(null)); held = null; resetSim(); saveLayout(); } };
+$('#speeds').onclick = e => { const s = e.target.dataset.s; if (s) { sim.speed = +s; save.speed = sim.speed; persist(); updateUI(); } };
+$('#lvl').onchange = e => { loadLevel(+e.target.value); persist(); };
+$('#next').onclick = () => { loadLevel(li + 1); persist(); };
+
+/* ---------- Editing ---------- */
+function cellAt(e) {
+  const r = cv.getBoundingClientRect();
+  const x = Math.floor((e.clientX - r.left) / r.width * LEVELS[li].w);
+  const y = Math.floor((e.clientY - r.top) / r.height * LEVELS[li].h);
+  return inBounds(x, y) ? { x, y } : null;
+}
+function place(p, type, first) {
+  const ex = grid[p.y][p.x];
+  if (ex && ex.fixed) return;
+  if (ex && ex.type === type) {
+    if (MACHINES[type].dir) { if (first) ex.dir = (ex.dir + 1) % 4; else ex.dir = rot; saveLayout(); }
+    return;
+  }
+  if (!canPlace(type, p.x, p.y)) return;
+  grid[p.y][p.x] = newCell(type, rot); saveLayout();
+}
+function erase(p) { if (grid[p.y][p.x] && !grid[p.y][p.x].fixed) { grid[p.y][p.x] = null; saveLayout(); } }
+function cancelHeld() {
+  if (!held) return;
+  const o = held.from; if (!grid[o.y][o.x]) grid[o.y][o.x] = held.cell;
+  held = null; saveLayout();
+}
+function act(p) {
+  if (held) {
+    if (!grid[p.y][p.x] && canPlace(held.cell.type, p.x, p.y)) {
+      held.cell.dir = rot; grid[p.y][p.x] = held.cell; held = null; saveLayout();
+    }
+    return;
+  }
+  if (tool === 'erase') return erase(p);
+  if (tool === 'config') {
+    const c = grid[p.y][p.x];
+    if (c && MACHINES[c.type].cfg) { const ks = [null, ...Object.keys(RES)]; c.f = ks[(ks.indexOf(c.f) + 1) % ks.length]; saveLayout(); }
+    return;
+  }
+  if (tool === 'move') {
+    const c = grid[p.y][p.x];
+    if (c && !c.fixed) { grid[p.y][p.x] = null; held = { cell: c, from: p }; rot = c.dir; }
+    return;
+  }
+  place(p, tool, true);
+}
+
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('pointerdown', e => {
+  e.preventDefault(); const p = cellAt(e); if (!p) return;
+  if (e.button === 2) { held ? cancelHeld() : erase(p); return; }
+  cv.setPointerCapture(e.pointerId); down = true; lastCell = p; hover = p; act(p);
+});
+cv.addEventListener('pointermove', e => {
+  const p = cellAt(e); hover = p;
+  if (!down || !p || (lastCell && p.x === lastCell.x && p.y === lastCell.y)) return;
+  if (tool === 'conveyor' && !held) {
+    const dx = p.x - lastCell.x, dy = p.y - lastCell.y;
+    const d = [0, 1, 2, 3].find(k => DX[k] === dx && DY[k] === dy);
+    if (d !== undefined) {
+      const prev = grid[lastCell.y][lastCell.x];
+      if (prev && prev.type === 'conveyor' && !prev.fixed) { prev.dir = d; }
+      rot = d;
+    }
+    place(p, 'conveyor', false);
+  } else if (tool === 'erase') erase(p);
+  lastCell = p;
+});
+const up = () => { down = false; lastCell = null; };
+cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+cv.addEventListener('pointerleave', () => { hover = null; });
+
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'SELECT') return;
+  const k = e.key.toLowerCase();
+  if (k === ' ') { e.preventDefault(); togglePlay(); }
+  else if (k.length === 1 && 'dsaw'.includes(k)) { rot = 'dsaw'.indexOf(k); if (held) held.cell.dir = rot; else if (hover) { const c = grid[hover.y][hover.x]; if (c && !c.fixed && MACHINES[c.type].dir) { c.dir = rot; saveLayout(); } } }
+  else if (k === 'escape') cancelHeld();
+  else if (k === 'm') setTool('move');
+  else if (k === 'e') setTool('erase');
+  else if (k === 'c' && LEVELS[li].tools.some(t => MACHINES[t].cfg)) setTool('config');
+  else Object.keys(MACHINES).forEach(t => { if (MACHINES[t].key === k && LEVELS[li].tools.includes(t)) setTool(t); });
+});
+
+/* ---------- Rendering ---------- */
+function rr(x, y, w, h, r) {
+  ctx.beginPath();
+  if (ctx.roundRect) return ctx.roundRect(x, y, w, h, r);
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function arrow(cx, cy, dir, size, color) {
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(dir * Math.PI / 2);
+  ctx.fillStyle = color; ctx.beginPath();
+  ctx.moveTo(size, 0); ctx.lineTo(-size * .6, -size * .8); ctx.lineTo(-size * .6, size * .8); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function drawItem(it, cx, cy) {
+  const r = RES[it]; ctx.fillStyle = r.color; ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1.5;
+  if (r.shape === 'dot') { ctx.beginPath(); ctx.arc(cx, cy, 6, 0, 7); ctx.fill(); ctx.stroke(); }
+  else if (r.shape === 'sq') { rr(cx - 7, cy - 7, 14, 14, 3); ctx.fill(); ctx.stroke(); }
+  else { rr(cx - 8, cy - 5, 16, 10, 3); ctx.fill(); ctx.stroke(); }
+}
+function drawMachine(c, x, y, t, alpha) {
+  const m = MACHINES[c.type], px = x * CELL, py = y * CELL, cx = px + CELL / 2, cy = py + CELL / 2;
+  const belt = c.type === 'conveyor' || m.belt;
+  const n = c.type === 'assembler' ? Object.values(c.inv).reduce((a, b) => a + b, 0) : c.inp.length;
+  ctx.globalAlpha = alpha;
+  if (c.type === 'conveyor') {
+    rr(px + 5, py + 5, CELL - 10, CELL - 10, 8); ctx.fillStyle = '#d5dce4'; ctx.fill();
+    arrow(cx, cy, c.dir, 9, m.color);
+  } else {
+    rr(px + 3, py + 3, CELL - 6, CELL - 6, 9); ctx.fillStyle = m.color; ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '700 15px system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(m.label, cx, cy + 1);
+    if (m.dir) arrow(cx + DX[c.dir] * 17, cy + DY[c.dir] * 17, c.dir, 5, '#fff');
+    if (c.type === 'sorter' && c.f) {   // filter swatch
+      ctx.fillStyle = RES[c.f].color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(px + CELL - 11, py + 11, 5, 0, 7); ctx.fill(); ctx.stroke();
+    }
+    if (n) {   // progress bar
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(px + 9, py + CELL - 12, CELL - 18, 4);
+      ctx.fillStyle = '#ffd37a'; ctx.fillRect(px + 9, py + CELL - 12, (CELL - 18) * Math.min(1, c.prog / (c.type === 'smelter' ? 4 : c.type === 'press' || c.type === 'crusher' ? 3 : 5)), 4);
+    }
+  }
+  ctx.globalAlpha = 1;
+  if (c.item && alpha === 1) {
+    let ox = 0, oy = 0;
+    if (belt) { if (c.slide !== null) { ox = -DX[c.slide] * (1 - t) * CELL; oy = -DY[c.slide] * (1 - t) * CELL; } }
+    else if (m.dir) { ox = DX[c.dir] * 10; oy = DY[c.dir] * 10; }
+    drawItem(c.item, cx + ox, cy + oy);
+  }
+  if (alpha === 1) {
+    if (n) { ctx.fillStyle = '#fff'; ctx.font = '11px system-ui,sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('\u00d7' + n, px + 6, py + 6); }
+    if (c.fixed) { ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.arc(px + CELL - 8, py + CELL - 8, 3, 0, 7); ctx.fill(); }
+  }
+}
+function render(now) {
+  const L = LEVELS[li], W = L.w, H = L.h;
+  const ms = BASE_MS / sim.speed, t = sim.running ? Math.min(1, (now - sim.last) / ms) : 1;
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.strokeStyle = '#dbe4ea'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let x = 0; x <= W; x++) { ctx.moveTo(x * CELL + .5, 0); ctx.lineTo(x * CELL + .5, H * CELL); }
+  for (let y = 0; y <= H; y++) { ctx.moveTo(0, y * CELL + .5); ctx.lineTo(W * CELL, y * CELL + .5); }
+  ctx.stroke();
+  L.ore.forEach(([x, y, r]) => {   // ore tiles
+    rr(x * CELL + 3, y * CELL + 3, CELL - 6, CELL - 6, 9); ctx.fillStyle = RES[r].color + '40'; ctx.fill();
+    ctx.fillStyle = RES[r].color;
+    [[14, 15], [30, 13], [22, 30], [34, 32], [12, 33]].forEach(([dx, dy]) => { ctx.beginPath(); ctx.arc(x * CELL + dx, y * CELL + dy, 3.2, 0, 7); ctx.fill(); });
+  });
+  (L.rocks || []).forEach(([x, y]) => { rr(x * CELL + 3, y * CELL + 3, CELL - 6, CELL - 6, 10); ctx.fillStyle = '#a3afbb'; ctx.fill(); rr(x * CELL + 9, y * CELL + 8, CELL - 20, 8, 4); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fill(); });
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (grid[y][x]) drawMachine(grid[y][x], x, y, t, 1);
+  // placement ghost
+  const gtype = held ? held.cell.type : (MACHINES[tool] ? tool : null);
+  if (hover && gtype) {
+    const free = !grid[hover.y][hover.x] || (!held && grid[hover.y][hover.x].type === gtype);
+    const ok = free && canPlace(gtype, hover.x, hover.y);
+    drawMachine({ type: gtype, dir: rot, item: null, inp: [], inv: {}, f: null, prog: 0 }, hover.x, hover.y, 1, .55);
+    if (!ok) { rr(hover.x * CELL + 2, hover.y * CELL + 2, CELL - 4, CELL - 4, 9); ctx.strokeStyle = '#d33'; ctx.lineWidth = 2.5; ctx.stroke(); }
+  } else if (hover && (tool === 'erase' || tool === 'move') && grid[hover.y][hover.x]) {
+    rr(hover.x * CELL + 2, hover.y * CELL + 2, CELL - 4, CELL - 4, 9);
+    ctx.strokeStyle = tool === 'erase' ? '#d33' : '#8a6fd1'; ctx.lineWidth = 2.5; ctx.stroke();
+  }
+}
+function frame(now) {
+  if (sim.running) {
+    const ms = BASE_MS / sim.speed;
+    if (now - sim.last > ms * 6) sim.last = now - ms;
+    while (sim.running && now - sim.last >= ms) { step(); sim.last += ms; }
+  }
+  render(now); requestAnimationFrame(frame);
+}
+
+/* ---------- Boot ---------- */
+sim.speed = [1, 2, 4].includes(save.speed) ? save.speed : 1;
+let start = Math.min(Math.max(+save.level || 0, 0), LEVELS.length - 1);
+while (start > 0 && !save.completed[LEVELS[start - 1].id]) start--;
+loadLevel(start);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
