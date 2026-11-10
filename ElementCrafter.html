@@ -21,6 +21,7 @@ button:focus-visible,.chip:focus-visible{outline:2px solid var(--acc);outline-of
 #hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:var(--mut);pointer-events:none;font-size:15px;line-height:1.5}
 .item{position:absolute;display:flex;align-items:center;gap:6px;padding:7px 11px;background:var(--chip);border:1px solid var(--line);border-radius:10px;font-size:15px;white-space:nowrap;touch-action:none;cursor:grab;box-shadow:0 1px 3px rgba(0,0,0,.15)}
 .item.final,.chip.final{border-color:#a688e0;box-shadow:0 0 9px 1px rgba(150,100,225,.45)}
+.item.dragon,.chip.dragon{border-color:#2fbf5b;box-shadow:0 0 9px 2px rgba(50,200,90,.6)}
 .item.drag{cursor:grabbing;box-shadow:0 6px 16px rgba(0,0,0,.25);border-color:var(--acc)}
 .item.pop{animation:pop .3s ease-out}
 .item.hint{border-color:#e0ad00;background:#fff6c9;color:#3a3000;box-shadow:0 0 0 2px rgba(255,208,0,.7),0 0 18px 5px rgba(255,208,0,.75);animation:hintglow 1.4s ease-in-out infinite}
@@ -48,6 +49,7 @@ button:focus-visible,.chip:focus-visible{outline:2px solid var(--acc);outline-of
 .sw-hint{border-color:#e0ad00;background:#fff6c9;box-shadow:0 0 6px 2px rgba(255,208,0,.8)}
 .sw-final{border-color:#a688e0;box-shadow:0 0 6px 1px rgba(150,100,225,.6)}
 .sw-new{background:var(--new)}
+.sw-dragon{border-color:#2fbf5b;box-shadow:0 0 6px 2px rgba(50,200,90,.7)}
 .sw-bad{border-color:#d93a3a;background:#ffd9d6}
 #rc{color:var(--mut);font-weight:400}
 .rr{padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
@@ -79,6 +81,7 @@ button:focus-visible,.chip:focus-visible{outline:2px solid var(--acc);outline-of
 <li><span class="sw sw-bad"></span>Shaking red: these two don't combine into anything.</li>
 <li><span class="sw sw-final"></span>Purple glow: this element has no recipes with other elements. It can only be upgraded by combining two of the same.</li>
 <li>Endless upgrades: if an element has no recipes at all, combine two of the same to make a Greater version. Keep going through Mighty, Legendary, Divine, Cosmic and Eternal, then Eternal II, III and beyond. Two Eternal elements with the same name add their numbers, so IV + V makes IX.</li>
+<li><span class="sw sw-dragon"></span>Green glow: HTTYD Dragons, as requested by Aroc.</li>
 <li><span class="sw sw-new"></span>Yellow in the list: an element you just discovered.</li>
 </ul>
 <h3>Discovered recipes <span id="rc"></span></h3>
@@ -1520,7 +1523,7 @@ Ice + Butterfly = Frost Butterfly 🦋
 Ice + Penguin = Frost Penguin 🐧
 Ice + Panda = Frost Panda 🐼
 Ice + Goat = Frost Goat 🐐
-Lightning + Dragon = Storm Dragon 🐉
+Storm + Dragon = Storm Dragon 🐉
 Lightning + Wolf = Storm Wolf 🐺
 Lightning + Tiger = Storm Tiger 🐯
 Lightning + Horse = Storm Horse 🐴
@@ -6426,6 +6429,60 @@ Bad Luck + Lightning = Bad Luck Lightning 🍀
 Bad Luck + Volcano = Bad Luck Volcano 🍀
 Bad Luck + Castle = Bad Luck Castle 🍀
 Bad Luck + Sun = Bad Luck Sun 🍀
+# ===== Expansion 7: How to Train Your Dragon (HTTYD Dragons, as requested by Aroc) =====
+# --- prerequisite elements ---
+Elephant + Ivory = Tusk 🦣
+Dog + Mouse = Chihuahua 🐕
+Bee + Honey = Hive 🐝
+Fire + Machine = Flamethrower 🔥
+Stone + Boulder = Rock 🪨
+Pickaxe + Gear = Drill 🔩
+Snow + Light = White ⚪
+Iron + Hammer = Anvil ⚒️
+Steel + Nail = Spike 📌
+Steel + Ball = Wrecking Ball 🏗️
+Knife + Wood = Spear 🔱
+Wood + Caveman = Club 🏏
+Guitar + Electricity = Amplifier 🔊
+Water + Cyclone = Whirlpool 🌀
+Airplane + Wood = Biplane ✈️
+Dinosaur + Bird = Velociraptor 🦖
+Oil + Air = Gas ⛽
+Sulfur + Water = Acid ☣️
+# --- the dragons ---
+Night + Dragon = Night Fury 🖤
+Light + Mirror = Light Fury 🤍
+Lightning + Dragon = Skrill ⚡
+Scorpion + Mantis = Triple Stryke 🦂
+Tusk + Spider = Deathgripper 🕷️
+Lava + Alligator = Monstrous Nightmare 🔥
+Chihuahua + Fire = Terrible Terror 🐲
+Sun + Hive = Fireworm 🐛
+Firestorm + Spark = Typhoomerang 🌪️
+Chameleon + Flamethrower = Singetail 🦎
+Rock + Rock = Gronckle 🪨
+Drill + Snake = Whispering Death 🐍
+White + Earthquake = Screaming Death 😱
+Lava + Anvil = Hotburple 🌋
+Spike + Wrecking Ball = Catastrophic Quaken 💥
+Dragon + Spear = Deadly Nadder 🦚
+Rhino + Dragon = Rumblehorn 🦏
+Club + Dragon = Snafflefang 🐉
+Compass + Blizzard = Windgnasher 🥶
+Mammoth + Glacier = Bewilderbeast 🐋
+Steam + Geyser = Scauldron ♨️
+Submarine + Amplifier = Thunderdrum 🥁
+Anchor + Whirlpool = Submaripper 🌊
+Lightning + Battery = Seashocker ⚡
+Owl + Biplane = Stormcutter 🦉
+Metal + Spear = Razorwhip 🗡️
+Scissors + Wood = Timberjack 🪚
+Velociraptor + Bee = Speed Stinger 🐝
+Gas + Spark = Hideous Zippleback 💨
+Butterfly + Amber = Death Song 🦋
+Ghost + Algae = Flightmare 👻
+Chameleon + Acid = Changewing 🌈
+Magnet + Metal = Armorwing 🧲
 `;
 var CMAP={};
 RECIPES.split("\n").forEach(function(line,i){
@@ -6457,6 +6514,8 @@ function combine(a,b){
 }
 var USED={};Object.keys(CMAP).forEach(function(k){k.split("+").forEach(function(n){USED[n]=1;});});
 function isFinal(n){return !USED[n];}
+var DRAGONS={};["Night Fury","Light Fury","Skrill","Triple Stryke","Deathgripper","Monstrous Nightmare","Terrible Terror","Fireworm","Typhoomerang","Singetail","Gronckle","Whispering Death","Screaming Death","Hotburple","Catastrophic Quaken","Deadly Nadder","Rumblehorn","Snafflefang","Windgnasher","Bewilderbeast","Scauldron","Thunderdrum","Submaripper","Seashocker","Stormcutter","Razorwhip","Timberjack","Speed Stinger","Hideous Zippleback","Death Song","Flightmare","Changewing","Armorwing"].forEach(function(d){DRAGONS[d]=1;});
+function isDragon(n){return !!DRAGONS[n];}
 var els={},order=[],hintOn=false,found=[],foundSet={};
 function load(){
   try{var d=JSON.parse(localStorage.getItem("infinite-elements-v1")||"null");
@@ -6475,7 +6534,7 @@ var board=document.getElementById("board"),tray=document.getElementById("tray"),
 var z=1,tt=0;
 function say(m,ms){toast.textContent=m;toast.classList.add("on");clearTimeout(tt);tt=setTimeout(function(){toast.classList.remove("on");},ms||1800);}
 function chip(n,isNew){
-  var c=document.createElement("div");c.className="chip"+(isNew?" new":"")+(isFinal(n)?" final":"");c.tabIndex=0;c.setAttribute("role","button");
+  var c=document.createElement("div");c.className="chip"+(isNew?" new":"")+(isFinal(n)?" final":"")+(isDragon(n)?" dragon":"");c.tabIndex=0;c.setAttribute("role","button");
   c.innerHTML='<span class="e"></span><span class="n"></span>';
   c.firstChild.textContent=els[n];c.lastChild.textContent=n;
   function go(){spawn(n,null,null,true);c.classList.remove("new");}
@@ -6489,7 +6548,7 @@ function renderTray(newName){
   count.textContent=order.length+" found";refreshHintBtn();
 }
 function spawn(n,x,y,jitter){
-  var it=document.createElement("div");it.className="item pop"+(isFinal(n)?" final":"");it.dataset.name=n;
+  var it=document.createElement("div");it.className="item pop"+(isFinal(n)?" final":"")+(isDragon(n)?" dragon":"");it.dataset.name=n;
   it.innerHTML='<span class="e"></span><span class="n"></span>';
   it.firstChild.textContent=els[n];it.lastChild.textContent=n;
   board.appendChild(it);
