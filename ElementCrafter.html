@@ -40,9 +40,10 @@ button:focus-visible,.chip:focus-visible{outline:2px solid var(--acc);outline-of
 .e{font-size:17px}
 #toast{position:absolute;left:50%;top:12px;transform:translate(-50%,-20px);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:14px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;z-index:99999;width:max-content;max-width:92%;text-align:center;line-height:1.35}
 #toast.on{opacity:1;transform:translate(-50%,0)}
-#help-btn{width:30px;height:30px;padding:0;border-radius:50%;font-weight:700;flex:none}
-#help{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);padding:max(16px,env(safe-area-inset-top,0px)) 16px max(16px,env(safe-area-inset-bottom,0px))}
-#help[hidden]{display:none}
+#help-btn,#ach-btn{width:30px;height:30px;padding:0;border-radius:50%;font-weight:700;flex:none}
+#ach-btn{font-size:15px}
+#help,#ach{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);padding:max(16px,env(safe-area-inset-top,0px)) 16px max(16px,env(safe-area-inset-bottom,0px))}
+#help[hidden],#ach[hidden]{display:none}
 .sheet{display:flex;flex-direction:column;width:100%;max-width:520px;max-height:100%;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
 .sh{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}
 .sh h2{flex:1;margin:0;font-size:17px}
@@ -61,16 +62,46 @@ button:focus-visible,.chip:focus-visible{outline:2px solid var(--acc);outline-of
 .rr:last-child{border-bottom:0}
 .rr .eq{color:var(--mut);padding:0 4px}
 .none{color:var(--mut)}
-@media (prefers-reduced-motion:reduce){.item.pop{animation:none}.item.nomatch{animation:none}.item.hint{animation:none}#toast{transition:none}}
+.dx #tray .chip:not(.base){cursor:not-allowed;border-color:#d93a3a;box-shadow:0 0 0 1px rgba(217,58,58,.5)}
+#dd{position:fixed;inset:0;z-index:100001;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);padding:16px}
+#dd[hidden]{display:none}
+#dd .box{width:100%;max-width:300px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.4);padding:16px;text-align:center;font-size:14px;line-height:1.45}
+#dd p{margin:0 0 14px}
+#dd .row{display:flex;gap:8px;justify-content:center}
+#dd button{min-width:76px}
+#dd #dd-yes{background:#d93a3a;border-color:#d93a3a;color:#fff}
+.pbar{height:12px;border-radius:7px;background:var(--chip);border:1px solid var(--line);overflow:hidden}
+.pfill{height:100%;width:0;background:var(--acc);transition:width .4s}
+.atxt{font-weight:700;margin-bottom:6px}
+.aprog{margin-bottom:4px}
+.ar{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line)}
+.ai{font-size:22px;width:30px;text-align:center;flex:none;line-height:1.2}
+.ar.lock .ai{filter:grayscale(1);opacity:.45}
+.ar.lock .an{color:var(--mut)}
+.ar.got .an::after{content:" ✓";color:#2fbf5b}
+.ad{color:var(--mut);font-size:13px}
+.ap{display:flex;align-items:center;gap:8px;margin-top:4px;font-size:12px;color:var(--mut)}
+.ap .pbar{flex:1;height:6px}
+.ap span{min-width:72px;text-align:right;font-variant-numeric:tabular-nums}
+#atoast{position:absolute;left:50%;bottom:12px;transform:translate(-50%,20px);background:var(--new);color:var(--ink);border:1px solid #e0ad00;padding:8px 14px;border-radius:14px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;z-index:99999;width:max-content;max-width:92%;text-align:center;line-height:1.35}
+#atoast.on{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){.item.pop{animation:none}.item.nomatch{animation:none}.item.hint{animation:none}#toast{transition:none}#atoast{transition:none}.pfill{transition:none}}
 </style>
 </head>
 <body>
 <div id="app">
-<header><button id="help-btn" aria-label="Help and recipes" title="Help">?</button><h1>Element Crafter</h1><span id="count"></span><button id="hint-btn">💡 Hint</button><button id="clear">Clear board</button><button id="reset">Reset</button></header>
+<header><button id="help-btn" aria-label="Help and recipes" title="Help">?</button><button id="ach-btn" aria-label="Achievements" title="Achievements">🏆</button><h1>Element Crafter</h1><span id="count"></span><button id="hint-btn">💡 Hint</button><button id="clear">Clear board</button><button id="reset">Reset</button></header>
 <div id="eotm" hidden></div>
-<div id="board"><div id="hint">Tap an element below to place it.<br>Drag one onto another to combine them.<br>Drag an element onto the list to remove it.</div><div id="toast"></div></div>
+<div id="board"><div id="hint">Tap an element below to place it.<br>Drag one onto another to combine them.<br>Drag an element onto the list to remove it.</div><div id="toast"></div><div id="atoast"></div></div>
 <div id="tray"></div>
 </div>
+<div id="ach" hidden role="dialog" aria-modal="true" aria-labelledby="ach-title"><div class="sheet">
+<div class="sh"><h2 id="ach-title">Achievements</h2><button id="ach-x" aria-label="Close">✕</button></div>
+<div class="sb">
+<div class="aprog"><div class="atxt" id="ach-txt"></div><div class="pbar" id="ach-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div class="pfill" id="ach-fill"></div></div></div>
+<div id="al"></div>
+</div></div></div>
+<div id="dd" hidden role="alertdialog" aria-modal="true" aria-labelledby="dd-msg"><div class="box"><p id="dd-msg"></p><div class="row"><button id="dd-yes">Yes</button><button id="dd-no">No</button></div></div></div>
 <div id="help" hidden role="dialog" aria-modal="true" aria-labelledby="help-title"><div class="sheet">
 <div class="sh"><h2 id="help-title">How to play</h2><button id="help-x" aria-label="Close">✕</button></div>
 <div class="sb">
@@ -79,6 +110,8 @@ button:focus-visible,.chip:focus-visible{outline:2px solid var(--acc);outline-of
 <li>Tap an element in the list at the bottom to place it on the board.</li>
 <li>Drag one element onto another to combine them. If the pair has a recipe, they merge into something new.</li>
 <li>Drag an element onto the list to remove it from the board. <b>Clear board</b> removes everything on the board; <b>Reset</b> erases all your progress.</li>
+<li>Hold <b>D</b> and click an element in the list to destroy it. The 5 starting elements can't be destroyed. After you confirm, it is removed from your list and counts as undiscovered again. Your discovered recipes are not affected.</li>
+<li>Tap the <b>🏆</b> button next to the help button to see your achievements and how far along you are.</li>
 <li><b>💡 Hint</b> works in two steps. Press once: one element glows and you get the first letters of what it makes. Press again: its partner appears too. The number shows how many undiscovered elements are within reach. If everything in reach is found, it points you to a recipe you haven't tried yet.</li>
 </ul>
 <h3>What the colors mean</h3>
@@ -6539,15 +6572,203 @@ function save(){try{localStorage.setItem("infinite-elements-v1",JSON.stringify(o
 var board=document.getElementById("board"),tray=document.getElementById("tray"),hint=document.getElementById("hint"),toast=document.getElementById("toast"),count=document.getElementById("count"),hintBtn=document.getElementById("hint-btn");
 var z=1,tt=0;
 function say(m,ms){toast.textContent=m;toast.classList.add("on");clearTimeout(tt);tt=setTimeout(function(){toast.classList.remove("on");},ms||1800);}
+
+// ===== Achievements =====
+var ACH_KEY="infinite-elements-ach-v1",stats={},unlocked={},made={},madeN=0,madeR=0,REACH=null,TOT_EL=0,TOT_REC=0,eotmNow="";
+function newStats(){return {hints:0,merges:0,fails:0,doubles:0,destroyed:0,clears:0,trashed:0,upgrades:0,tier:0,eternal:0,finals:0,eotm:0,maxBoard:0,help:0,cheat:0,stumped:0,days:[]};}
+function computeTotals(){
+  if(REACH){return;}
+  REACH={};BASE.forEach(function(p){REACH[p[0]]=1;});
+  var keys=Object.keys(CMAP),ch=true;
+  while(ch){ch=false;keys.forEach(function(k){var r=CMAP[k].t;if(REACH[r]){return;}var p=k.split("+");if(REACH[p[0]]&&REACH[p[1]]){REACH[r]=1;ch=true;}});}
+  TOT_EL=0;Object.keys(REACH).forEach(function(n){if(!isBase(n)){TOT_EL++;}});
+  TOT_REC=0;keys.forEach(function(k){var p=k.split("+");if(REACH[p[0]]&&REACH[p[1]]){TOT_REC++;}});
+}
+function today(){var d=new Date();return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();}
+function persistAch(){try{localStorage.setItem(ACH_KEY,JSON.stringify({s:stats,u:unlocked,m:Object.keys(made)}));}catch(e){}}
+function loadAch(){
+  computeTotals();
+  stats=newStats();unlocked={};made={};
+  var d=null;try{d=JSON.parse(localStorage.getItem(ACH_KEY)||"null");}catch(e){}
+  if(d&&typeof d==="object"){
+    if(d.s&&typeof d.s==="object"){
+      Object.keys(stats).forEach(function(k){if(typeof stats[k]==="number"&&typeof d.s[k]==="number"){stats[k]=d.s[k];}});
+      if(Array.isArray(d.s.days)){stats.days=d.s.days.filter(function(x){return typeof x==="string";});}
+    }
+    if(d.u&&typeof d.u==="object"){Object.keys(d.u).forEach(function(k){if(d.u[k]){unlocked[k]=1;}});}
+    if(Array.isArray(d.m)){d.m.forEach(function(n){if(typeof n==="string"){made[n]=1;}});}
+  }else{order.forEach(function(n){made[n]=1;});}
+  madeN=0;madeR=0;stuck=0;tries=0;
+  Object.keys(made).forEach(function(n){if(!isBase(n)){madeN++;if(REACH[n]){madeR++;}}});
+  var t=today();if(stats.days.indexOf(t)<0){stats.days.push(t);}
+  persistAch();checkAch(true);
+}
+// v = current value, g = goal (number or function); a goal of 1 is a yes/no achievement
+var ACHS=[
+ {id:"el10",c:"Elements",e:"🌱",n:"Seedling",d:"Create 10 elements.",v:function(c){return c.n;},g:10},
+ {id:"el50",c:"Elements",e:"🌿",n:"Growing Collection",d:"Create 50 elements.",v:function(c){return c.n;},g:50},
+ {id:"el100",c:"Elements",e:"💯",n:"Triple Digits",d:"Create 100 elements.",v:function(c){return c.n;},g:100},
+ {id:"el250",c:"Elements",e:"🗃️",n:"Curator",d:"Create 250 elements.",v:function(c){return c.n;},g:250},
+ {id:"el500",c:"Elements",e:"🏛️",n:"Archivist",d:"Create 500 elements.",v:function(c){return c.n;},g:500},
+ {id:"el1000",c:"Elements",e:"📚",n:"Living Encyclopedia",d:"Create 1,000 elements.",v:function(c){return c.n;},g:1000},
+ {id:"el2500",c:"Elements",e:"🌌",n:"Universe Builder",d:"Create 2,500 elements.",v:function(c){return c.n;},g:2500},
+ {id:"elall",c:"Elements",e:"👑",n:"Completionist",d:"Create every element in the recipe book.",v:function(c){return c.r;},g:function(){return TOT_EL;}},
+ {id:"hint1",c:"Hints",e:"💡",n:"Lending a Hand",d:"Use a hint.",v:function(c){return c.s.hints;},g:1},
+ {id:"hint10",c:"Hints",e:"🔦",n:"Seeking Guidance",d:"Use 10 hints.",v:function(c){return c.s.hints;},g:10},
+ {id:"hint50",c:"Hints",e:"🧭",n:"Hint Hoarder",d:"Use 50 hints.",v:function(c){return c.s.hints;},g:50},
+ {id:"hint100",c:"Hints",e:"🆘",n:"Can't Do It Alone",d:"Use 100 hints.",v:function(c){return c.s.hints;},g:100},
+ {id:"rec10",c:"Recipes",e:"📝",n:"Note Taker",d:"Discover 10 recipes.",v:function(c){return c.rec;},g:10},
+ {id:"rec100",c:"Recipes",e:"📒",n:"Recipe Collector",d:"Discover 100 recipes.",v:function(c){return c.rec;},g:100},
+ {id:"rec1000",c:"Recipes",e:"📖",n:"Cookbook Author",d:"Discover 1,000 recipes.",v:function(c){return c.rec;},g:1000},
+ {id:"rec5000",c:"Recipes",e:"🧙",n:"Grand Grimoire",d:"Discover 5,000 recipes.",v:function(c){return c.rec;},g:5000},
+ {id:"recall",c:"Recipes",e:"🏆",n:"Master of Recipes",d:"Discover every recipe.",v:function(c){return c.rec;},g:function(){return TOT_REC;}},
+ {id:"mg1",c:"Combining",e:"⚗️",n:"First Reaction",d:"Combine two elements successfully.",v:function(c){return c.s.merges;},g:1},
+ {id:"mg100",c:"Combining",e:"🧪",n:"Lab Technician",d:"Make 100 successful combinations.",v:function(c){return c.s.merges;},g:100},
+ {id:"mg1000",c:"Combining",e:"🥼",n:"Mad Scientist",d:"Make 1,000 successful combinations.",v:function(c){return c.s.merges;},g:1000},
+ {id:"mg5000",c:"Combining",e:"⚡",n:"Chain Reaction",d:"Make 5,000 successful combinations.",v:function(c){return c.s.merges;},g:5000},
+ {id:"fail1",c:"Combining",e:"🤷",n:"Oops",d:"Try a combination that doesn't work.",v:function(c){return c.s.fails;},g:1},
+ {id:"fail25",c:"Combining",e:"🔁",n:"Trial and Error",d:"Try 25 combinations that don't work.",v:function(c){return c.s.fails;},g:25},
+ {id:"fail100",c:"Combining",e:"🧱",n:"Stubborn",d:"Try 100 combinations that don't work.",v:function(c){return c.s.fails;},g:100},
+ {id:"dbl1",c:"Combining",e:"👯",n:"Two of a Kind",d:"Combine two copies of the same element.",v:function(c){return c.s.doubles;},g:1},
+ {id:"dbl25",c:"Combining",e:"🪞",n:"Seeing Double",d:"Combine two copies of the same element 25 times.",v:function(c){return c.s.doubles;},g:25},
+ {id:"fin1",c:"Combining",e:"🟣",n:"Dead End",d:"Create an element with no recipes (purple glow).",v:function(c){return c.s.finals;},g:1},
+ {id:"fin25",c:"Combining",e:"🔮",n:"End of the Line",d:"Create 25 elements with no recipes.",v:function(c){return c.s.finals;},g:25},
+ {id:"up1",c:"Upgrades",e:"⬆️",n:"Level Up",d:"Create an upgraded element, like Greater.",v:function(c){return c.s.tier;},g:1},
+ {id:"up3",c:"Upgrades",e:"🔮",n:"Legend in the Making",d:"Create a Legendary element.",v:function(c){return c.s.tier;},g:3},
+ {id:"up4",c:"Upgrades",e:"😇",n:"Touched by Divinity",d:"Create a Divine element.",v:function(c){return c.s.tier;},g:4},
+ {id:"up5",c:"Upgrades",e:"🌠",n:"Cosmic Scale",d:"Create a Cosmic element.",v:function(c){return c.s.tier;},g:5},
+ {id:"up6",c:"Upgrades",e:"♾️",n:"Forever and Ever",d:"Create an Eternal element.",v:function(c){return c.s.tier;},g:6},
+ {id:"eter2",c:"Upgrades",e:"🏛️",n:"Roman Numerals",d:"Create an Eternal element with a numeral, like II.",v:function(c){return c.s.eternal;},g:2},
+ {id:"eter10",c:"Upgrades",e:"❌",n:"X Marks the Spot",d:"Create an Eternal element numbered X (10) or higher.",v:function(c){return c.s.eternal;},g:10},
+ {id:"brd10",c:"Board & cleanup",e:"🍽️",n:"Crowded Table",d:"Have 10 elements on the board at once.",v:function(c){return c.s.maxBoard;},g:10},
+ {id:"brd25",c:"Board & cleanup",e:"🎪",n:"Standing Room Only",d:"Have 25 elements on the board at once.",v:function(c){return c.s.maxBoard;},g:25},
+ {id:"clr1",c:"Board & cleanup",e:"🧹",n:"Clean Slate",d:"Use Clear board.",v:function(c){return c.s.clears;},g:1},
+ {id:"trash20",c:"Board & cleanup",e:"🗑️",n:"Taking Out the Trash",d:"Drag 20 elements off the board onto the list.",v:function(c){return c.s.trashed;},g:20},
+ {id:"des1",c:"Board & cleanup",e:"💣",n:"Demolition",d:"Destroy an element with the D key.",v:function(c){return c.s.destroyed;},g:1},
+ {id:"des10",c:"Board & cleanup",e:"🏗️",n:"Spring Cleaning",d:"Destroy 10 elements.",v:function(c){return c.s.destroyed;},g:10},
+ {id:"journey",c:"Special elements",e:"🗺️",n:"A Long Journey",d:"Create Gleaming Ruined City, the element with the most steps to reach.",v:function(c){return c.made["Gleaming Ruined City"]?1:0;},g:1},
+ {id:"maker",c:"Special elements",e:"👨‍💻",n:"Meet the Maker",d:"Create Nijumet, the developer.",v:function(c){return c.made["Nijumet"]?1:0;},g:1},
+ {id:"httyd",c:"Special elements",e:"🐉",n:"HTTYD Fan",d:"Create all the dragon elements (the green ones).",v:function(c){var n=0;Object.keys(DRAGONS).forEach(function(k){if(c.made[k]){n++;}});return n;},g:function(){return Object.keys(DRAGONS).length;}},
+ {id:"stumped",c:"Other",e:"🪵",n:"Stumped",d:"Go 5 minutes without discovering a new element while trying combinations.",v:function(c){return c.s.stumped;},g:1},
+ {id:"eotm",c:"Other",e:"⏱️",n:"Right on Time",d:"Create the Element of the minute while it's on the banner.",v:function(c){return c.s.eotm;},g:1},
+ {id:"day3",c:"Other",e:"📅",n:"Regular",d:"Play on 3 different days.",v:function(c){return c.s.days.length;},g:3},
+ {id:"day7",c:"Other",e:"🔥",n:"Dedicated",d:"Play on 7 different days.",v:function(c){return c.s.days.length;},g:7},
+ {id:"help1",c:"Other",e:"📖",n:"Read the Manual",d:"Open the help screen.",v:function(c){return c.s.help;},g:1},
+ {id:"cheat",c:"Other",e:"🕵️",n:"Caught Red-Handed",d:"Secret achievement.",secret:true,v:function(c){return c.s.cheat;},g:1}
+];
+function goal(a){return typeof a.g==="function"?a.g():a.g;}
+function achCtx(){return {s:stats,made:made,n:madeN,r:madeR,rec:found.length};}
+var aq=[],aBusy=false,atoast=document.getElementById("atoast");
+function nextAch(){
+  var a=aq.shift();
+  if(!a){aBusy=false;atoast.classList.remove("on");return;}
+  aBusy=true;atoast.textContent="🏆 Achievement unlocked: "+a.n;atoast.classList.add("on");
+  setTimeout(nextAch,2800);
+}
+function checkAch(silent){
+  var c=achCtx(),ch=false;
+  ACHS.forEach(function(a){
+    if(unlocked[a.id]){return;}
+    if(a.v(c)>=goal(a)){unlocked[a.id]=1;ch=true;if(!silent){aq.push(a);}}
+  });
+  if(ch){persistAch();if(!silent&&!aBusy){nextAch();}if(!ach.hidden){renderAch();}}
+}
+function bump(k,n){stats[k]=(stats[k]||0)+(n||1);persistAch();checkAch();}
+function noteBoard(){
+  var n=board.querySelectorAll(".item").length;
+  if(n>stats.maxBoard){stats.maxBoard=n;persistAch();checkAch();}
+}
+function noteMerge(an,bn,res,up,fresh){
+  stats.merges++;
+  if(an===bn){stats.doubles++;}
+  if(!made[res.t]){made[res.t]=1;if(!isBase(res.t)){madeN++;if(REACH[res.t]){madeR++;}}}
+  if(!up&&fresh&&isFinal(res.t)){stats.finals++;}
+  if(fresh&&res.t===eotmNow){stats.eotm++;}
+  if(fresh){stuck=0;tries=0;}else{tries++;}
+  if(up){
+    stats.upgrades++;
+    var m=res.t.match(/^(Greater|Mighty|Legendary|Divine|Cosmic|Eternal) /);
+    if(m){stats.tier=Math.max(stats.tier,TIERS.indexOf(m[1])+1);}
+    if(m&&m[1]==="Eternal"){var e=eternal(res.t);if(e){stats.eternal=Math.max(stats.eternal,e.v);}}
+  }
+  persistAch();checkAch();
+}
+var stuck=0,tries=0;
+setInterval(function(){
+  if(document.hidden){return;}
+  stuck++;
+  if(stuck>=300&&tries>0&&!stats.stumped){stats.stumped=1;persistAch();checkAch();}
+},1000);
+var ach=document.getElementById("ach"),abtn=document.getElementById("ach-btn"),ax=document.getElementById("ach-x");
+function renderAch(){
+  var list=document.getElementById("al");list.innerHTML="";
+  var c=achCtx(),total=ACHS.length,got=ACHS.filter(function(a){return unlocked[a.id];}).length,pct=total?Math.round(got/total*100):0;
+  document.getElementById("ach-txt").textContent=got+" / "+total+" unlocked ("+pct+"%)";
+  document.getElementById("ach-fill").style.width=pct+"%";
+  document.getElementById("ach-bar").setAttribute("aria-valuenow",String(pct));
+  var cat=null;
+  ACHS.forEach(function(a){
+    if(a.c!==cat){cat=a.c;var h=document.createElement("h3");h.textContent=cat;list.appendChild(h);}
+    var on=!!unlocked[a.id],hide=a.secret&&!on,g=goal(a);
+    var row=document.createElement("div");row.className="ar "+(on?"got":"lock");
+    var ic=document.createElement("div");ic.className="ai";ic.textContent=hide?"❔":a.e;
+    var tx=document.createElement("div");
+    var nm=document.createElement("b");nm.className="an";nm.textContent=hide?"???":a.n;
+    var ds=document.createElement("div");ds.className="ad";ds.textContent=hide?"Secret achievement.":a.d;
+    tx.appendChild(nm);tx.appendChild(ds);
+    if(!on&&!hide&&g>1){
+      var v=Math.min(a.v(c),g),ap=document.createElement("div");ap.className="ap";
+      var bar=document.createElement("div");bar.className="pbar";
+      var f=document.createElement("div");f.className="pfill";f.style.width=Math.round(v/g*100)+"%";bar.appendChild(f);
+      var t=document.createElement("span");t.textContent=v.toLocaleString()+" / "+g.toLocaleString();
+      ap.appendChild(bar);ap.appendChild(t);tx.appendChild(ap);
+    }
+    row.appendChild(ic);row.appendChild(tx);list.appendChild(row);
+  });
+}
+function openAch(){renderAch();ach.hidden=false;ach.querySelector(".sb").scrollTop=0;ax.focus();}
+function closeAch(){ach.hidden=true;abtn.focus();}
+abtn.addEventListener("click",openAch);ax.addEventListener("click",closeAch);
+ach.addEventListener("pointerdown",function(e){if(e.target===ach){closeAch();}});
+document.addEventListener("keydown",function(e){if(e.key==="Escape"&&!ach.hidden){closeAch();}});
 function chip(n,isNew){
-  var c=document.createElement("div");c.className="chip"+(isNew?" new":"")+(isFinal(n)?" final":"")+(isDragon(n)?" dragon":"");c.tabIndex=0;c.setAttribute("role","button");
+  var c=document.createElement("div");c.className="chip"+(isBase(n)?" base":"")+(isNew?" new":"")+(isFinal(n)?" final":"")+(isDragon(n)?" dragon":"");c.tabIndex=0;c.setAttribute("role","button");
   c.innerHTML='<span class="e"></span><span class="n"></span>';
   c.firstChild.textContent=els[n];c.lastChild.textContent=n;
-  function go(){spawn(n,null,null,true);c.classList.remove("new");}
+  function go(){if(dHeld){if(isBase(n)){say("The 5 base elements can't be destroyed",2200);}else{askDestroy(n);}return;}spawn(n,null,null,true);c.classList.remove("new");}
   c.addEventListener("click",go);
   c.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}});
   return c;
 }
+var dHeld=false,ddTarget=null,dd=document.getElementById("dd"),ddMsg=document.getElementById("dd-msg"),ddYes=document.getElementById("dd-yes"),ddNo=document.getElementById("dd-no"),ddFrom=null;
+function setD(v){dHeld=v;document.body.classList.toggle("dx",v);}
+function askDestroy(n){
+  ddTarget=n;ddFrom=document.activeElement;
+  ddMsg.textContent="Destroy "+els[n]+" "+n+"?";
+  dd.hidden=false;ddNo.focus();
+}
+function closeDd(){dd.hidden=true;ddTarget=null;if(ddFrom&&ddFrom.focus&&document.body.contains(ddFrom)){try{ddFrom.focus();}catch(e){}}ddFrom=null;}
+function isBase(n){return BASE.some(function(p){return p[0]===n;});}
+function destroyEl(n){
+  if(!els[n]||isBase(n)){return;}
+  var em=els[n];
+  delete els[n];
+  var i=order.indexOf(n);if(i>=0){order.splice(i,1);}
+  board.querySelectorAll(".item").forEach(function(o){if(o.dataset.name===n){if(o.classList.contains("hint")){clearHint();}o.remove();}});
+  checkEmpty();
+  save();renderTray();
+  bump("destroyed");
+  say("💥 Destroyed "+em+" "+n);
+}
+ddYes.addEventListener("click",function(){var n=ddTarget;closeDd();if(n){destroyEl(n);}});
+ddNo.addEventListener("click",closeDd);
+dd.addEventListener("pointerdown",function(e){if(e.target===dd){closeDd();}});
+document.addEventListener("keydown",function(e){
+  if(e.key==="Escape"&&!dd.hidden){closeDd();return;}
+  if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&e.key&&e.key.toLowerCase()==="d"){setD(true);}
+});
+document.addEventListener("keyup",function(e){if(e.key&&e.key.toLowerCase()==="d"){setD(false);}});
+window.addEventListener("blur",function(){setD(false);});
 function renderTray(newName){
   tray.innerHTML="";
   order.forEach(function(n){tray.appendChild(chip(n,n===newName));});
@@ -6563,6 +6784,7 @@ function spawn(n,x,y,jitter){
   it.style.left=Math.max(0,Math.min(W-w,x))+"px";it.style.top=Math.max(0,Math.min(H-h,y))+"px";
   it.style.zIndex=++z;
   hint.style.display="none";
+  noteBoard();
   it.addEventListener("pointerdown",function(e){drag(it,e);});
   return it;
 }
@@ -6585,7 +6807,7 @@ function drag(it,e){
     it.removeEventListener("pointermove",mv);it.removeEventListener("pointerup",up);it.removeEventListener("pointercancel",up);
     it.classList.remove("drag");
     var ir=it.getBoundingClientRect(),tr=tray.getBoundingClientRect();
-    if(ev.clientY>tr.top){if(it.classList.contains("hint")){clearHint();}it.remove();checkEmpty();return;}
+    if(ev.clientY>tr.top){if(it.classList.contains("hint")){clearHint();}it.remove();checkEmpty();bump("trashed");return;}
     var best=null,bs=0;
     board.querySelectorAll(".item").forEach(function(o){
       if(o===it){return;}
@@ -6599,19 +6821,20 @@ function drag(it,e){
 function merge(a,b){
   var an=a.dataset.name,bn=b.dataset.name;
   var res=combine({t:an,e:els[an]},{t:bn,e:els[bn]});
-  if(!res){[a,b].forEach(function(n){n.classList.remove("nomatch");void n.offsetWidth;n.classList.add("nomatch");});
+  if(!res){tries++;bump("fails");[a,b].forEach(function(n){n.classList.remove("nomatch");void n.offsetWidth;n.classList.add("nomatch");});
     setTimeout(function(){a.classList.remove("nomatch");b.classList.remove("nomatch");},550);return;}
   var x=(parseFloat(a.style.left)+parseFloat(b.style.left))/2,y=(parseFloat(a.style.top)+parseFloat(b.style.top))/2;
   if(a.classList.contains("hint")||b.classList.contains("hint")){clearHint();}
   a.remove();b.remove();
   var pk=key(an,bn);if(!foundSet[pk]){foundSet[pk]=1;found.push(pk);savePairs();}
   var fresh=!els[res.t];
+  noteMerge(an,bn,res,!CMAP[key(an,bn)],fresh);
   if(fresh){els[res.t]=res.e;order.push(res.t);save();renderTray(res.t);say("✨ New: "+res.e+" "+res.t);}
   spawn(res.t,x,y);
 }
 function clearHint(){hintOn=false;hintTarget=null;hintStep=0;board.querySelectorAll(".item.hint").forEach(function(i){i.classList.remove("hint");});}
 function checkEmpty(){if(!board.querySelector(".item")){hint.style.display="flex";}}
-document.getElementById("clear").addEventListener("click",function(){clearHint();board.querySelectorAll(".item").forEach(function(i){i.remove();});checkEmpty();});
+document.getElementById("clear").addEventListener("click",function(){if(board.querySelector(".item")){bump("clears");}clearHint();board.querySelectorAll(".item").forEach(function(i){i.remove();});checkEmpty();});
 var hintTarget=null,hintKind="",hintStep=0;
 function hintPool(){
   var fresh=[],recipe=[];
@@ -6654,6 +6877,7 @@ document.getElementById("hint-btn").addEventListener("click",function(){
   var ia=order.indexOf(p[0]),ib=order.indexOf(p[1]);
   var anchor=ia>=ib?p[0]:p[1],partner=ia>=ib?p[1]:p[0];
   hintStep++;
+  if(hintStep<=2){bump("hints");}
   if(hintStep===1){
     glow(anchor);
     if(hintKind==="fresh"){say("Hint 1/2: try "+els[anchor]+" "+anchor+" with something. Makes: "+pattern(r.t),3600);}
@@ -6667,7 +6891,13 @@ document.getElementById("hint-btn").addEventListener("click",function(){
   }
 });
 var help=document.getElementById("help"),hbtn=document.getElementById("help-btn"),hx=document.getElementById("help-x");
-function part(n){var s=document.createElement("span");s.textContent=(els[n]||"")+" "+n;return s;}
+function emojiOf(n){
+  if(els[n]){return els[n];}
+  for(var i=0;i<BASE.length;i++){if(BASE[i][0]===n){return BASE[i][1];}}
+  var ks=Object.keys(CMAP);for(var j=0;j<ks.length;j++){if(CMAP[ks[j]].t===n){return CMAP[ks[j]].e;}}
+  return "";
+}
+function part(n){var s=document.createElement("span");s.textContent=emojiOf(n)+" "+n;return s;}
 function renderRecipes(){
   var rl=document.getElementById("rl");rl.innerHTML="";
   document.getElementById("rc").textContent="("+found.length+")";
@@ -6680,7 +6910,7 @@ function renderRecipes(){
     rl.appendChild(row);
   });
 }
-function openHelp(){renderRecipes();help.hidden=false;help.querySelector(".sb").scrollTop=0;hx.focus();}
+function openHelp(){bump("help");renderRecipes();help.hidden=false;help.querySelector(".sb").scrollTop=0;hx.focus();}
 function closeHelp(){help.hidden=true;hbtn.focus();}
 hbtn.addEventListener("click",openHelp);hx.addEventListener("click",closeHelp);
 help.addEventListener("pointerdown",function(e){if(e.target===help){closeHelp();}});
@@ -6689,8 +6919,8 @@ var rb=document.getElementById("reset"),rt=0;
 rb.addEventListener("click",function(){
   if(rb.dataset.arm){
     clearTimeout(rt);delete rb.dataset.arm;rb.textContent="Reset";
-    els={};order=[];try{localStorage.removeItem("infinite-elements-v1");localStorage.removeItem("infinite-elements-pairs-v1");}catch(e){}
-    load();renderTray();clearHint();board.querySelectorAll(".item").forEach(function(i){i.remove();});checkEmpty();say("Progress reset");
+    els={};order=[];try{localStorage.removeItem("infinite-elements-v1");localStorage.removeItem("infinite-elements-pairs-v1");localStorage.removeItem(ACH_KEY);}catch(e){}
+    load();loadAch();renderTray();clearHint();board.querySelectorAll(".item").forEach(function(i){i.remove();});checkEmpty();say("Progress reset");
   }else{
     rb.dataset.arm="1";rb.textContent="Tap again to reset";
     rt=setTimeout(function(){delete rb.dataset.arm;rb.textContent="Reset";},2500);
@@ -6704,7 +6934,7 @@ document.addEventListener("keydown",function(e){
     typed="";var added=0;
     BASE.forEach(function(p){if(!els[p[0]]){els[p[0]]=p[1];order.push(p[0]);added++;}});
     Object.keys(CMAP).forEach(function(k){var r=CMAP[k];if(!els[r.t]){els[r.t]=r.e;order.push(r.t);added++;}});
-    save();renderTray();say("🔓 Cheat code: "+added+" elements unlocked",2600);
+    bump("cheat");save();renderTray();say("🔓 Cheat code: "+added+" elements unlocked",2600);
   }
 });
 // ===== Element of the minute: same algorithm as the Guide (seeded from the UTC minute) =====
@@ -6744,13 +6974,14 @@ function initEotm(){
   function tick(){
     var now=Date.now(),m=Math.floor(now/60000);
     if(m!==eMin){eMin=m;eName=seedPick(m);nm.textContent=(EMO[eName]||"")+" "+eName;}
+    eotmNow=eName;
     tr.textContent=els[eName]?"✓ You've made this one":"Try to make it!";
     var left=60-Math.floor((now%60000)/1000);
     tm.textContent="· 0:"+(left<10?"0":"")+left;
   }
   tick();setInterval(tick,500);document.addEventListener("visibilitychange",tick);
 }
-load();renderTray();
+load();loadAch();renderTray();
 setTimeout(initEotm,0);
 })();
 </script>
