@@ -6575,7 +6575,7 @@ function say(m,ms){toast.textContent=m;toast.classList.add("on");clearTimeout(tt
 
 // ===== Achievements =====
 var ACH_KEY="infinite-elements-ach-v1",stats={},unlocked={},made={},madeN=0,madeR=0,REACH=null,TOT_EL=0,TOT_REC=0,eotmNow="";
-function newStats(){return {hints:0,merges:0,fails:0,doubles:0,destroyed:0,clears:0,trashed:0,upgrades:0,tier:0,eternal:0,finals:0,eotm:0,maxBoard:0,help:0,cheat:0,stumped:0,days:[]};}
+function newStats(){return {hints:0,merges:0,fails:0,doubles:0,destroyed:0,clears:0,trashed:0,upgrades:0,tier:0,eternal:0,finals:0,eotm:0,maxBoard:0,help:0,cheat:0,autoplay:0,stumped:0,days:[]};}
 function computeTotals(){
   if(REACH){return;}
   REACH={};BASE.forEach(function(p){REACH[p[0]]=1;});
@@ -6654,6 +6654,7 @@ var ACHS=[
  {id:"day3",c:"Other",e:"📅",n:"Regular",d:"Play on 3 different days.",v:function(c){return c.s.days.length;},g:3},
  {id:"day7",c:"Other",e:"🔥",n:"Dedicated",d:"Play on 7 different days.",v:function(c){return c.s.days.length;},g:7},
  {id:"help1",c:"Other",e:"📖",n:"Read the Manual",d:"Open the help screen.",v:function(c){return c.s.help;},g:1},
+ {id:"autoplay",c:"Other",e:"🤖",n:"Autopilot",d:"Secret achievement.",secret:true,v:function(c){return c.s.autoplay;},g:1},
  {id:"cheat",c:"Other",e:"🕵️",n:"Caught Red-Handed",d:"Secret achievement.",secret:true,v:function(c){return c.s.cheat;},g:1}
 ];
 function goal(a){return typeof a.g==="function"?a.g():a.g;}
@@ -6850,9 +6851,10 @@ function refreshHintBtn(){
 function pickHint(){
   var pl=hintPool(),pool=pl.fresh.length?pl.fresh:pl.recipe,kind=pl.fresh.length?"fresh":"recipe";
   if(!pool.length){return null;}
-  var n=order.length,best=null,bs=-1;
+  var n=order.length,best=null,bs=-1,pos={};
+  order.forEach(function(x,i){pos[x]=i;});
   pool.forEach(function(k){
-    var p=k.split("+"),r=CMAP[k],rec=Math.max(order.indexOf(p[0]),order.indexOf(p[1]))/n;
+    var p=k.split("+"),r=CMAP[k],rec=Math.max(pos[p[0]],pos[p[1]])/n;
     var s=(isFinal(r.t)?0:4)+rec*3+Math.random()*2;
     if(s>bs){bs=s;best=k;}
   });
@@ -6919,7 +6921,7 @@ var rb=document.getElementById("reset"),rt=0;
 rb.addEventListener("click",function(){
   if(rb.dataset.arm){
     clearTimeout(rt);delete rb.dataset.arm;rb.textContent="Reset";
-    els={};order=[];try{localStorage.removeItem("infinite-elements-v1");localStorage.removeItem("infinite-elements-pairs-v1");localStorage.removeItem(ACH_KEY);}catch(e){}
+    apStop();els={};order=[];try{localStorage.removeItem("infinite-elements-v1");localStorage.removeItem("infinite-elements-pairs-v1");localStorage.removeItem(ACH_KEY);}catch(e){}
     load();loadAch();renderTray();clearHint();board.querySelectorAll(".item").forEach(function(i){i.remove();});checkEmpty();say("Progress reset");
   }else{
     rb.dataset.arm="1";rb.textContent="Tap again to reset";
@@ -6936,6 +6938,37 @@ document.addEventListener("keydown",function(e){
     Object.keys(CMAP).forEach(function(k){var r=CMAP[k];if(!els[r.t]){els[r.t]=r.e;order.push(r.t);added++;}});
     bump("cheat");save();renderTray();say("🔓 Cheat code: "+added+" elements unlocked",2600);
   }
+});
+var APCODE="_AUTOPLAY_",typedA="",apOn=false,apLast=null,apRaf=0;
+function apStop(msg){
+  apOn=false;cancelAnimationFrame(apRaf);
+  if(msg){say(msg,2600);}
+  checkEmpty();
+}
+function apStep(){
+  if(!apOn){return;}
+  if(apLast&&apLast.parentNode){apLast.remove();}
+  apLast=null;
+  var h=pickHint();
+  if(!h){apStop("🤖 Autoplay finished: nothing left within reach");return;}
+  var p=h.k.split("+"),W=board.clientWidth,H=board.clientHeight,x=W/2-60,y=H/2-20;
+  clearHint();
+  var a=spawn(p[0],x,y),b=spawn(p[1],x+8,y+4);
+  merge(a,b);
+  if(a.parentNode){a.remove();b.remove();apStop("🤖 Autoplay stopped: that pair didn't combine");return;}
+  var last=board.lastElementChild;
+  if(last&&last.classList.contains("item")){apLast=last;}
+  apRaf=requestAnimationFrame(apStep);
+}
+document.addEventListener("keydown",function(e){
+  if(e.ctrlKey||e.metaKey||e.altKey||!e.key||e.key.length!==1){return;}
+  typedA=(typedA+e.key.toUpperCase()).slice(-APCODE.length);
+  if(typedA!==APCODE){return;}
+  typedA="";
+  if(apOn){apStop("🤖 Autoplay off");return;}
+  apOn=true;apLast=null;bump("autoplay");
+  say("🤖 Autoplay on. Type it again to stop",2000);
+  apRaf=requestAnimationFrame(apStep);
 });
 // ===== Element of the minute: same algorithm as the Guide (seeded from the UTC minute) =====
 function initEotm(){
