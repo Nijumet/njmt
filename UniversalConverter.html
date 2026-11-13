@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Universal Converter</title>
+<style>
+:root{--bg:#0e1013;--pn:#171a20;--pn2:#1e222a;--ln:#2a2f3a;--tx:#e9ecf1;--mu:#8e97a8;--ac:#5fd4c4;color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--ln);flex-wrap:wrap}
+h1{margin:0;font:600 22px Georgia,'Iowan Old Style',serif;letter-spacing:.2px}h3{margin:22px 0 10px;font-size:15px;color:var(--mu);font-weight:600}
+button,select,input,textarea{font:inherit;color:inherit}
+button{background:var(--pn2);border:1px solid var(--ln);border-radius:8px;padding:8px 12px;cursor:pointer;transition:background .15s,border-color .15s}
+button:hover{border-color:var(--ac)}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
+input,select,textarea{background:var(--bg);border:1px solid var(--ln);border-radius:8px;padding:8px 10px;max-width:100%}
+nav{display:flex;gap:4px;padding:8px 18px;border-bottom:1px solid var(--ln);overflow-x:auto}
+nav button{background:none;border:0;border-radius:6px;color:var(--mu)}nav button.on{color:var(--tx);background:var(--pn2);box-shadow:inset 0 -2px var(--ac)}
+main{max-width:980px;margin:0 auto;padding:16px 18px 60px}section{display:none}section.on{display:block}
+.cats{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px}.cats button{white-space:nowrap}.cats button.on{border-color:var(--ac);background:#1b2a2a}
+.card{background:var(--pn);border:1px solid var(--ln);border-radius:12px;padding:16px;margin-top:10px}
+.row{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center}
+.pick{position:relative}.pb{width:100%;text-align:left;display:flex;gap:8px;align-items:center;border-left:4px solid var(--c,var(--ac))}
+.pp{position:absolute;z-index:20;left:0;right:0;top:100%;margin-top:4px;background:var(--pn2);border:1px solid var(--ln);border-radius:10px;padding:6px;box-shadow:0 12px 30px #0009}
+.pp input{width:100%;margin-bottom:6px}.pp ul{list-style:none;margin:0;padding:0;max-height:260px;overflow:auto}
+.pp li{padding:6px 8px;border-radius:6px;cursor:pointer;border-left:3px solid var(--c);display:flex;justify-content:space-between;gap:8px}.pp li:hover,.pp li.hl{background:var(--bg)}
+.pp small,.mu{color:var(--mu)}.io{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:12px;margin-top:14px;align-items:center}
+#val{font-size:24px;width:100%}.res{font:600 clamp(26px,5vw,44px)/1.15 Georgia,serif;word-break:break-word;color:var(--ac)}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}.badge{font-size:11px;border-radius:99px;padding:1px 8px;border:1px solid var(--c);color:var(--c);white-space:nowrap}
+.info{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;font-size:13px;color:var(--mu)}
+.cmp,.enc{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.tile{background:var(--pn);border:1px solid var(--ln);border-left:4px solid var(--c);border-radius:10px;padding:10px;cursor:pointer;text-align:left}
+.tile b{display:block;font:600 18px Georgia,serif;word-break:break-word}.err{color:#ff8a8a}
+.item{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--ln);align-items:center}
+.f{display:grid;gap:8px;max-width:460px}.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ac);color:#04201c;padding:8px 16px;border-radius:99px;opacity:0;transition:opacity .25s;pointer-events:none}.toast.on{opacity:1}
+@media(max-width:640px){.row{grid-template-columns:1fr}.row #swap{justify-self:center}.io,.info{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style></head><body>
+<header><h1>The Universal Converter</h1><label><input type="checkbox" id="weird"> Weird mode <span class="mu">(unusual units first)</span></label></header>
+<nav id="tabs"><button data-t="conv">Converter</button><button data-t="enc">Encyclopedia</button><button data-t="chal">Challenges</button><button data-t="cust">Custom units</button><button data-t="lib">Favorites &amp; history</button></nav>
+<main>
+<section id="t-conv">
+ <div class="cats" id="cats"></div>
+ <div class="card">
+  <div class="row"><div id="pf"></div><button id="swap" title="Swap units" aria-label="Swap units">⇄</button><div id="pt"></div></div>
+  <div class="io"><input id="val" inputmode="decimal" aria-label="Value" autocomplete="off"><div class="res" id="res" aria-live="polite"></div></div>
+  <div class="mu" id="eq" style="margin-top:6px"></div>
+  <div class="tools">
+   <button id="copy">Copy</button><button id="fav">☆ Favorite</button><button id="rnd">🎲 Random</button>
+   <label>Precision <select id="prec"></select></label><label><input type="checkbox" id="sci"> Scientific</label>
+  </div>
+  <div class="info" id="info"></div>
+ </div>
+ <h3>Equivalent units</h3><div class="cmp" id="cmp"></div>
+ <h3>Unit of the day</h3><div class="card" id="uotd"></div>
+</section>
+<section id="t-enc"><div class="tools"><input id="eq_s" placeholder="Search all units…" style="flex:1;min-width:180px"><select id="eq_c"></select><select id="eq_t"></select></div><div class="enc" id="enc" style="margin-top:12px"></div></section>
+<section id="t-chal"><div class="card"><div id="cq" style="font:600 20px Georgia,serif"></div>
+ <div class="tools"><input id="cg" inputmode="decimal" placeholder="Your guess"><button id="cc">Check</button><button id="cr">Show answer</button><button id="cn">Next challenge</button><button id="cx">Random challenge</button></div><div id="ca" style="margin-top:12px"></div></div></section>
+<section id="t-cust"><div class="card f" id="cf">
+ <b>Create a unit</b><select id="u_c"></select><input id="u_n" placeholder="Name (e.g. giraffe neck)"><input id="u_s" placeholder="Symbol">
+ <div class="tools" style="margin:0"><span>1 new unit =</span><input id="u_f" inputmode="decimal" placeholder="amount" style="width:110px"><select id="u_u"></select></div>
+ <select id="u_t"><option value="u">Humorous</option><option value="a">Approximate</option><option value="h">Historical</option><option value="f">Fictional</option></select>
+ <input id="u_e" placeholder="Emoji (optional)" maxlength="4"><input id="u_d" placeholder="Description (optional)"><button id="u_add">Add unit</button><div id="u_m" class="err"></div></div>
+ <h3>Your custom units</h3><div id="ulist"></div></section>
+<section id="t-lib"><h3>Favorites</h3><div id="favs"></div><h3>Recent conversions <button id="hclr">Clear history</button></h3><div id="hist"></div></section>
+</main><div class="toast" id="toast"></div>
+<script>
+"use strict";
+/* ===== UNIT DATABASE =====
+ Each category is declared with D(key,name,icon,baseUnitName,lines). Each line:
+   name|symbol|factor|type|emoji|description
+ factor = how many BASE units one of this unit equals (an expression like 1e3 or 31557600/7 is fine).
+ type: s=standard h=historical u=humorous a=approximate f=fictional
+ Non-linear units (temperature) instead define to(v)->base and from(base)->v (see TEMP below).
+ To add units: append a line to a category. Custom units created in the UI are stored in localStorage and merged in at start-up.
+ Every unit converts via its category's base unit, so n units give n*(n-1) conversions with zero extra code. */
+const TYPES={s:['Standard','#7aa7ff'],h:['Historical','#e6b450'],u:['Humorous','#f472b6'],a:['Approximate','#5fd4c4'],f:['Fictional','#b69cff']};
+const CATS={};
+const ev=s=>Function('"use strict";return('+s+')')();
+function addUnit(c,name,sym,f,type,e,d,extra){CATS[c].units.push(Object.assign({id:c+':'+name.toLowerCase(),cat:c,name,sym,f,type,e:e||'',d:d||''},extra||{}))}
+function D(key,name,icon,base,txt){CATS[key]={key,name,icon,base,units:[]};
+ txt.trim().split('\n').forEach(l=>{const p=l.split('|');if(p.length<3)return;addUnit(key,p[0].trim(),p[1].trim(),ev(p[2]),(p[3]||'s').trim(),p[4],p[5])})}
+D('length','Length','📏','metre',`
+metre|m|1|s|📏|SI base unit; the distance light travels in 1/299,792,458 s.
+kilometre|km|1e3
+centimetre|cm|1e-2
+millimetre|mm|1e-3
+micrometre|µm|1e-6
+nanometre|nm|1e-9
+ångström|Å|1e-10|s||Used for atomic distances.
+inch|in|0.0254|s||Exactly 2.54 cm since the 1959 international yard agreement.
+foot|ft|0.3048
+yard|yd|0.9144
+mile|mi|1609.344|s||International statute mile.
+nautical mile|nmi|1852|s|⚓|Exactly 1,852 m; roughly one minute of latitude.
+light-second|ls|299792458|s
+light-year|ly|9460730472580800|s|✨|Distance light travels in one Julian year.
+astronomical unit|au|149597870700|s|🌍|Exact IAU definition, close to the Earth–Sun distance.
+parsec|pc|3.0856775814913673e16|s|🔭|About 3.26 light-years; defined by one arcsecond of parallax.
+kiloparsec|kpc|3.0856775814913673e19
+megaparsec|Mpc|3.0856775814913673e22
+thou (mil)|thou|2.54e-5|h||One thousandth of an inch.
+furlong|fur|201.168|h|🐎|220 yards; the length of a traditional ploughed furrow.
+chain|ch|20.1168|h|⛓️|Gunter's chain, 66 ft. 80 chains = 1 mile.
+rod|rd|5.0292|h||16.5 ft; also called a pole or perch.
+league|lea|4828.032|h||Defined here as 3 statute miles; historically it varied widely.
+hand|hh|0.1016|h|🐴|4 inches; still used for horse height.
+fathom|ftm|1.8288|h|🌊|6 feet; used for water depth.
+cubit|cbt|0.4572|h|📜|Ancient forearm-length unit. Definitions range ~0.44–0.53 m; this is the 18-inch common cubit.
+Smoot|smoot|1.7018|u|🧍|Oliver Smoot's height (5 ft 7 in), used in 1958 to measure the Harvard Bridge.
+banana|banana|0.1778|a|🍌|Approximation: ~7 in (18 cm) is a commonly cited average; real bananas vary.
+football field (US)|FF|109.728|u|🏈|100 yards, excluding end zones.
+Eiffel Tower|Eiffel|330|a|🗼|About 330 m including antennas (varies slightly with antenna changes).
+blue whale|whale|25|a|🐋|Typical adult ~25 m; the largest recorded were around 30 m.
+washing machine|wm|0.85|a|🧺|Approximate height of a front-loading washer.
+Earth diameter|⊕|1.2742e7|a|🌍|Mean diameter, about 12,742 km.
+Planck length|ℓP|1.616255e-35|s|🔬|The natural length scale from fundamental constants.
+`);
+D('time','Time','⏱️','second',`
+second|s|1|s|⏱️|SI base unit: 9,192,631,770 periods of a caesium-133 transition.
+millisecond|ms|1e-3
+microsecond|µs|1e-6
+nanosecond|ns|1e-9
+minute|min|60
+hour|h|3600
+day|d|86400|s||86,400 s (civil day, ignoring leap seconds).
+week|wk|604800
+month (average)|mo|31557600/12|a|🗓️|Months last 28–31 days. This is the Julian-year average (365.25 d / 12 = 30.4375 d).
+year (Julian)|yr|31557600|s||365.25 days. Other years exist: calendar 365/366 d, tropical ≈365.2422 d.
+decade|dec|315576000
+century|cent|3155760000
+millennium|kyr|31557600000
+lustrum|lu|157788000|h||Five years, used in ancient Rome.
+fortnight|fn|1209600|h|📅|Fourteen days.
+shake|shake|1e-8|h|⚛️|10 nanoseconds; coined in nuclear physics.
+jiffy|jiffy|0.01|a|⚡|Has several meanings. Default here: 1/100 s. Others: 1/60 s (AC mains/TV), 1/50 s, or light crossing a femtometre (~3×10⁻²⁴ s) in physics.
+moment|moment|90|h|⌛|Medieval unit: 1/40 of an hour = 90 s (the default here). Other sources give different lengths.
+Planck time|tP|5.391247e-44|s|🔬|Light crossing a Planck length; the shortest time with theoretical meaning.
+microfortnight|µfn|1.2096|u|💻|One millionth of a fortnight, 1.2096 s; a computing in-joke.
+microcentury|µc|3155.76|u||One millionth of a century, ≈52.6 minutes.
+Minecraft tick|tick|0.05|f|⛏️|1/20 s of real time (one game tick).
+Minecraft day|MC day|1200|f|⛏️|20 real minutes = one in-game day (24,000 ticks).
+dog year|dog yr|31557600/7|a|🐕|Ambiguous: "1 human year = 7 dog years" is a rough myth. Here 1 dog year = 1/7 year of real time.
+`);
+D('mass','Mass / Weight','⚖️','kilogram',`
+kilogram|kg|1|s|⚖️|SI base unit, defined via the Planck constant.
+milligram|mg|1e-6
+gram|g|1e-3
+metric ton|t|1000
+pound|lb|0.45359237|s||Exactly 0.45359237 kg.
+ounce|oz|0.028349523125
+stone|st|6.35029318|h||14 pounds; still used in the UK and Ireland.
+US ton|ton|907.18474|s||2,000 pounds (short ton).
+long ton|LT|1016.0469088|h||2,240 pounds (UK).
+carat|ct|2e-4|s|💎|Exactly 200 mg.
+grain|gr|6.479891e-5|h||1/7000 lb; based on a grain of barley.
+slug|slug|14.5939029|s||Imperial mass unit that accelerates at 1 ft/s² under 1 lbf.
+dalton|Da|1.66053906892e-27|s
+Moon mass|M☾|7.342e22|s|🌙
+Earth mass|M⊕|5.9722e24|s|🌍
+solar mass|M☉|1.98847e30|s|☀️
+paperclip|clip|0.001|a|📎|About 1 g.
+house cat|cat|4.5|a|🐈|Typical adult cat; 3.5–5.5 kg.
+brick|brick|2.7|a|🧱|A fired clay brick is roughly 2.5–3 kg.
+car|car|1500|a|🚗|A typical mid-size car; real cars range from 1,000 to 2,500 kg.
+washing machine|wm|70|a|🧺|Typical front-loader, 60–90 kg.
+elephant|elephant|5000|a|🐘|Adult African elephants weigh roughly 4,000–6,000 kg.
+blue whale|whale|150000|a|🐋|Adults weigh roughly 100–180 tonnes.
+`);
+D('power','Power','⚡','watt',`
+watt|W|1|s|⚡|One joule per second.
+milliwatt|mW|1e-3
+microwatt|µW|1e-6
+kilowatt|kW|1e3
+megawatt|MW|1e6
+gigawatt|GW|1e9
+horsepower (mechanical)|hp|745.69987158227|h|🐎|≈745.7 W (550 ft·lbf/s), coined by James Watt.
+metric horsepower|PS|735.49875|h||75 kgf·m/s ≈ 735.5 W.
+pony power|pony|745.69987158227/2|u|🐴|Invented unit: half a horsepower.
+human power|human|100|a|🚶|Roughly 100 W at rest or light activity (varies).
+bicycle power|bike|150|a|🚲|Comfortable cycling output of a fit rider (varies widely).
+nuclear reactor|reactor|1e9|a|☢️|A typical large reactor produces roughly 1 GW of electricity.
+lightning bolt|bolt|1e12|a|🌩️|Peak power of a lightning stroke is on the order of 1 TW; very rough.
+`);
+D('energy','Energy','🔋','joule',`
+joule|J|1|s|🔋
+kilojoule|kJ|1e3
+megajoule|MJ|1e6
+calorie (thermochemical)|cal|4.184|s||4.184 J.
+kilocalorie|kcal|4184
+food Calorie|Cal|4184|s|🍎|Nutrition "Calories" are kilocalories.
+watt-hour|Wh|3600
+kilowatt-hour|kWh|3.6e6
+megawatt-hour|MWh|3.6e9
+electronvolt|eV|1.602176634e-19|s
+BTU (IT)|BTU|1055.05585262|s
+erg|erg|1e-7|h
+foot-pound|ft·lbf|1.3558179483314|s
+AA battery|AA|9360|a|🔋|About 2.6 Wh; varies by chemistry.
+lightning bolt|bolt|1e9|a|🌩️|Typical lightning stroke ~1 GJ; extremely variable.
+ton of TNT|tTNT|4.184e9|s|💥|Defined convention: 4.184 GJ.
+kiloton of TNT|kt TNT|4.184e12|s
+megaton of TNT|Mt TNT|4.184e15|s
+`);
+D('area','Area','⬛','square metre',`
+square metre|m²|1|s
+square kilometre|km²|1e6
+square centimetre|cm²|1e-4
+square millimetre|mm²|1e-6
+hectare|ha|1e4
+acre|ac|4046.8564224|h||Traditionally, the area one man with an ox could plough in a day.
+rood|rood|1011.7141056|h||A quarter of an acre.
+square foot|ft²|0.09290304
+square yard|yd²|0.83612736
+square inch|in²|6.4516e-4
+square mile|mi²|2589988.110336
+barn|b|1e-28|s|🔬|Nuclear-physics unit; "as big as a barn" for a nucleus.
+football field (US)|FF|5351.2128|u|🏈|120 yd × 53⅓ yd including end zones ≈ 5,351 m² (playing area only: 4,831 m²).
+tennis court|court|260.8704|a|🎾|78 ft × 36 ft doubles court.
+basketball court|bball|436.6|a|🏀|NBA court, 94 ft × 50 ft.
+`);
+D('volume','Volume','🧪','cubic metre',`
+cubic metre|m³|1|s
+litre|L|1e-3|s|🧪
+millilitre|mL|1e-6
+cubic centimetre|cm³|1e-6
+US gallon|gal|3.785411784e-3
+imperial gallon|imp gal|4.54609e-3
+US quart|qt|9.46352946e-4
+US pint|pt|4.73176473e-4
+US cup|cup|2.36588236e-4
+US fluid ounce|fl oz|2.95735295625e-5
+tablespoon (US)|tbsp|1.47867647813e-5
+teaspoon (US)|tsp|4.92892159375e-6
+barrel (oil)|bbl|0.158987294928|h|🛢️|42 US gallons.
+firkin|firkin|0.040914|h||9 imperial gallons.
+hogshead (US)|hhd|0.238480942392|h||63 US gallons.
+washing machine drum|wm|0.06|a|🧺|Typical drum, 50–80 L.
+bathtub|tub|0.3|a|🛁|Typical filled bath, about 300 L.
+swimming pool (Olympic)|pool|2500|a|🏊|50 m × 25 m × 2 m minimum depth = 2,500 m³.
+`);
+D('speed','Speed','🚀','metre per second',`
+metre per second|m/s|1|s|🚀
+kilometre per hour|km/h|1/3.6
+mile per hour|mph|0.44704
+foot per second|ft/s|0.3048
+knot|kn|1852/3600|s|⛵|One nautical mile per hour.
+Mach (sea level, 15 °C)|Ma|340.29|a|✈️|Speed of sound varies with temperature and altitude.
+speed of light|c|299792458|s|✨
+walking speed|walk|1.4|a|🚶|Average adult pace, ≈5 km/h.
+running speed|run|3.5|a|🏃|Casual jogging, ≈12.6 km/h.
+bicycle speed|bike|5.5|a|🚲|≈20 km/h.
+airplane speed|plane|250|a|✈️|Typical airliner cruise ≈900 km/h.
+snail|snail|0.001|a|🐌|Garden snails: ≈1 mm/s.
+cheetah|cheetah|29|a|🐆|Top speeds of ~29 m/s are well documented.
+`);
+D('temperature','Temperature','🌡️','kelvin','');
+/* TEMP: non-linear units use to(v)->kelvin and from(kelvin)->v instead of a factor. */
+[['kelvin','K',v=>v,k=>k,'s'],['Celsius','°C',v=>v+273.15,k=>k-273.15,'s'],['Fahrenheit','°F',v=>(v+459.67)*5/9,k=>k*9/5-459.67,'s'],['Rankine','°R',v=>v*5/9,k=>k*9/5,'s']]
+ .forEach(t=>addUnit('temperature',t[0],t[1],null,t[4],'🌡️','Converted with offset formulas, not simple multiplication.',{to:t[2],from:t[3]}));
+D('pressure','Pressure','🎈','pascal',`
+pascal|Pa|1|s|🎈
+kilopascal|kPa|1e3
+megapascal|MPa|1e6
+bar|bar|1e5
+millibar|mbar|100
+atmosphere|atm|101325|s||Standard atmosphere.
+PSI|psi|6894.757293168
+torr|Torr|101325/760
+millimetre of mercury|mmHg|133.322387415
+inch of mercury|inHg|3386.389
+`);
+D('force','Force','🧲','newton',`
+newton|N|1|s|🧲
+kilonewton|kN|1e3
+pound-force|lbf|4.4482216152605
+kilogram-force|kgf|9.80665|s||Weight of 1 kg under standard gravity.
+dyne|dyn|1e-5|h
+Moon weight of 1 kg|kg@Moon|1.62|a|🌙|1 kg × lunar surface gravity (~1.62 m/s²).
+Mars weight of 1 kg|kg@Mars|3.71|a|🔴
+Jupiter weight of 1 kg|kg@Jup|24.79|a|🪐
+`);
+D('data','Data','💾','bit',`
+bit|b|1|s|💾
+nibble|nib|4|h
+byte|B|8
+kilobyte|kB|8e3
+megabyte|MB|8e6
+gigabyte|GB|8e9
+terabyte|TB|8e12
+petabyte|PB|8e15
+exabyte|EB|8e18
+kibibyte|KiB|8*1024
+mebibyte|MiB|8*1024**2
+gibibyte|GiB|8*1024**3
+tebibyte|TiB|8*1024**4
+pebibyte|PiB|8*1024**5
+exbibyte|EiB|8*1024**6
+kilobit|kb|1e3
+megabit|Mb|1e6
+gigabit|Gb|1e9
+floppy disk|floppy|1474560*8|h|💾|The "1.44 MB" disk holds 1,474,560 bytes formatted.
+CD-ROM|CD|700*1024**2*8|h|💿|Nominal 700 MiB.
+DVD|DVD|4.7e9*8|h|📀|Single-layer, 4.7 GB.
+`);
+D('frequency','Frequency','〰️','hertz',`
+hertz|Hz|1|s|〰️
+millihertz|mHz|1e-3
+kilohertz|kHz|1e3
+megahertz|MHz|1e6
+gigahertz|GHz|1e9
+terahertz|THz|1e12
+revolutions per minute|rpm|1/60
+beats per minute|bpm|1/60
+concert pitch A4|A440|440|a|🎵|Standard tuning pitch.
+`);
+const DEF={length:['metre','foot'],time:['hour','minute'],mass:['kilogram','pound'],power:['kilowatt','horsepower (mechanical)'],energy:['kilojoule','kilocalorie'],area:['square metre','square foot'],volume:['litre','us gallon'],speed:['kilometre per hour','mile per hour'],temperature:['celsius','fahrenheit'],pressure:['bar','psi'],force:['newton','pound-force'],data:['gigabyte','mebibyte'],frequency:['hertz','kilohertz']};
+const store={get(k,d){try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const find=id=>{const c=CATS[(id||'').split(':')[0]];return c&&c.units.find(u=>u.id===id)};
+const byName=(c,n)=>CATS[c].units.find(u=>u.name.toLowerCase()===n.toLowerCase());
+let CUSTOM=store.get('uc_custom',[]);
+CUSTOM.forEach(u=>{if(CATS[u.cat])addUnit(u.cat,u.name,u.sym,u.f,u.type,u.e,u.d,{custom:true})});
+/* Convert via the category base unit. Returns NaN when impossible. */
+function conv(v,a,b){const base=a.to?a.to(v):v*a.f;if(!isFinite(base))return NaN;
+ if(a.cat==='temperature'&&base<-1e-9)return NaN; /* below absolute zero */
+ if(b.from)return b.from(base);return b.f>0?base/b.f:NaN}
+const sup=n=>String(n).replace(/./g,c=>c==='-'?'⁻':'⁰¹²³⁴⁵⁶⁷⁸⁹'[c]);
+function fmt(x,P){if(!isFinite(x))return '—';if(x===0)return '0';const p=+P.prec,ax=Math.abs(x);
+ if(P.sci||ax>=1e15||ax<1e-6){let[m,e]=x.toExponential(p-1).split('e');if(m.includes('.'))m=m.replace(/\.?0+$/,'');return m+' × 10'+sup(parseInt(e,10))}
+ return new Intl.NumberFormat('en-US',{maximumSignificantDigits:p}).format(x)}
+function parseNum(s){s=String(s).trim().replace(/,/g,'');if(s===''||!/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s))return NaN;return Number(s)}
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const col=u=>TYPES[u.type][1];
+function defDesc(u){return u.d||('A standard '+CATS[u.cat].name.toLowerCase()+' unit.')}
+function defn(u){const C=CATS[u.cat];if(u.to)return 'Offset formula to kelvin (not a simple factor)';return '1 '+u.sym+' = '+fmt(u.f,{prec:10})+' '+C.units[0].sym+(C.units[0].f===1?'':'')}
+/*UI*/
+const $=s=>document.querySelector(s);
+let S=Object.assign({cat:'length',from:'length:metre',to:'length:foot',val:'1',weird:false,prec:6,sci:false,tab:'conv'},store.get('uc_state',{}));
+if(!find(S.from)||!find(S.to)||find(S.from).cat!==S.cat||find(S.to).cat!==S.cat)setCat(S.cat,true);
+const save=()=>store.set('uc_state',S);
+let FAV=store.get('uc_fav',[]),HIST=store.get('uc_hist',[]);
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),1400)}
+function setCat(c,quiet){S.cat=c;const d=DEF[c]||[];const U=CATS[c].units;
+ const a=byName(c,d[0]||'')||U[0],b=byName(c,d[1]||'')||U[1]||U[0];S.from=a.id;S.to=b.id;if(!quiet){drawCats();pickers.forEach(p=>p.refresh());update()}save()}
+/* searchable dropdown */
+function picker(host,key){const o={};host.className='pick';
+ host.innerHTML='<button type="button" class="pb"></button><div class="pp" hidden><input placeholder="Search units…" aria-label="Search units"><ul></ul></div>';
+ const btn=host.firstChild,pp=host.children[1],inp=pp.firstChild,ul=pp.lastChild;let hl=0,list=[];
+ function draw(){const q=inp.value.trim().toLowerCase();
+  list=CATS[S.cat].units.filter(u=>!q||(u.name+' '+u.sym).toLowerCase().includes(q));
+  list.sort((a,b)=>S.weird?((a.type==='s')-(b.type==='s')):0);hl=Math.min(hl,Math.max(0,list.length-1));
+  ul.innerHTML=list.map((u,i)=>'<li style="--c:'+col(u)+'" class="'+(i===hl?'hl':'')+'" data-i="'+i+'"><span>'+u.e+' '+esc(u.name)+'</span><small>'+esc(u.sym)+'</small></li>').join('')||'<li class="mu">No units match.</li>'}
+ function pickAt(i){if(!list[i])return;S[key]=list[i].id;close();o.refresh();update();save()}
+ function close(){pp.hidden=true}
+ o.refresh=()=>{const u=find(S[key]);btn.style.setProperty('--c',col(u));btn.innerHTML='<span>'+u.e+'</span><b>'+esc(u.name)+'</b><small class="mu">'+esc(u.sym)+'</small>'};
+ btn.onclick=()=>{const was=pp.hidden;document.querySelectorAll('.pp').forEach(p=>p.hidden=true);pp.hidden=!was;if(was){inp.value='';hl=0;draw();inp.focus()}};
+ inp.oninput=()=>{hl=0;draw()};
+ inp.onkeydown=e=>{if(e.key==='ArrowDown'){hl=Math.min(hl+1,list.length-1);draw();e.preventDefault()}else if(e.key==='ArrowUp'){hl=Math.max(hl-1,0);draw();e.preventDefault()}else if(e.key==='Enter')pickAt(hl);else if(e.key==='Escape')close()};
+ ul.onclick=e=>{const li=e.target.closest('li[data-i]');if(li)pickAt(+li.dataset.i)};
+ document.addEventListener('click',e=>{if(!host.contains(e.target))close()});o.refresh();return o}
+const pickers=[picker($('#pf'),'from'),picker($('#pt'),'to')];
+function drawCats(){$('#cats').innerHTML=Object.values(CATS).map(c=>'<button data-c="'+c.key+'" class="'+(c.key===S.cat?'on':'')+'">'+c.icon+' '+c.name+'</button>').join('')}
+$('#cats').onclick=e=>{const b=e.target.closest('button');if(b)setCat(b.dataset.c)};
+$('#prec').innerHTML=[3,4,6,8,10,12,15].map(n=>'<option value="'+n+'">'+n+' sig. digits</option>').join('');
+let hT;
+function update(rec){const a=find(S.from),b=find(S.to),v=parseNum(S.val);const valEl=$('#val');if(valEl.value!==S.val)valEl.value=S.val;
+ $('#prec').value=S.prec;$('#sci').checked=S.sci;$('#weird').checked=S.weird;
+ $('#fav').textContent=(isFav()?'★':'☆')+' Favorite';
+ const r=conv(v,a,b);
+ if(S.val.trim()===''){$('#res').textContent='Enter a value';$('#eq').textContent=''}
+ else if(isNaN(v)){$('#res').innerHTML='<span class="err">Not a valid number</span>';$('#eq').textContent='Use digits, a decimal point, or scientific form like 1.5e8.'}
+ else if(isNaN(r)){$('#res').innerHTML='<span class="err">Cannot convert</span>';$('#eq').textContent=a.cat==='temperature'?'That is below absolute zero.':'Value is out of range.'}
+ else{$('#res').textContent=fmt(r,S)+' '+b.sym;$('#eq').textContent=fmt(v,S)+' '+a.sym+' = '+fmt(r,S)+' '+b.sym+'   (1 '+a.sym+' = '+fmt(conv(1,a,b),S)+' '+b.sym+')'}
+ $('#info').innerHTML=[a,b].map(u=>'<div style="--c:'+col(u)+'"><span class="badge">'+TYPES[u.type][0]+'</span> <b style="color:var(--tx)">'+esc(u.name)+'</b><br>'+esc(defDesc(u))+'</div>').join('');
+ drawCmp(v,a);
+ if(rec!==false&&isFinite(r)&&S.val.trim()!==''){clearTimeout(hT);hT=setTimeout(()=>addHist(),900)}}
+function drawCmp(v,a){const ok=isFinite(v);const ref=ok&&v!==0?Math.abs(v):1;
+ const cand=CATS[S.cat].units.filter(u=>u!==a).map(u=>{const r=conv(ref,a,u);return{u,r,s:isFinite(r)&&r>0?Math.abs(Math.log10(r)-0.8):99}}).filter(x=>x.s<99);
+ cand.sort((x,y)=>x.s-y.s);const std=cand.filter(x=>x.u.type==='s').slice(0,4),odd=cand.filter(x=>x.u.type!=='s').slice(0,5);
+ const pick=S.weird?odd.concat(std).slice(0,8):std.slice(0,3).concat(odd).slice(0,8);
+ $('#cmp').innerHTML=pick.map(x=>{const r=ok?conv(v,a,x.u):NaN;return '<button class="tile" style="--c:'+col(x.u)+'" data-id="'+x.u.id+'"><span class="mu">'+x.u.e+' '+esc(x.u.name)+'</span><b>'+fmt(r,S)+' '+esc(x.u.sym)+'</b></button>'}).join('')}
+$('#cmp').onclick=e=>{const t=e.target.closest('.tile');if(t){S.to=t.dataset.id;pickers[1].refresh();update();save()}};
+$('#val').oninput=e=>{S.val=e.target.value;update();save()};
+$('#prec').onchange=e=>{S.prec=+e.target.value;update();save();drawEnc()};
+$('#sci').onchange=e=>{S.sci=e.target.checked;update();save()};
+$('#weird').onchange=e=>{S.weird=e.target.checked;pickers.forEach(p=>p.refresh());update();save()};
+$('#swap').onclick=()=>{const t=S.from;S.from=S.to;S.to=t;const r=conv(parseNum(S.val),find(t),find(S.from));pickers.forEach(p=>p.refresh());update();save()};
+function copyText(t){const done=()=>toast('Copied');if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(done,()=>fb())}else fb();
+ function fb(){const x=document.createElement('textarea');x.value=t;document.body.appendChild(x);x.select();try{document.execCommand('copy');done()}catch(e){toast('Copy failed')}x.remove()}}
+$('#copy').onclick=()=>{const t=$('#eq').textContent.split('   ')[0];if(t.includes('='))copyText(t);else toast('Nothing to copy')};
+const isFav=()=>FAV.some(f=>f.from===S.from&&f.to===S.to);
+$('#fav').onclick=()=>{if(isFav())FAV=FAV.filter(f=>!(f.from===S.from&&f.to===S.to));else FAV.unshift({from:S.from,to:S.to});store.set('uc_fav',FAV);update(false);drawLib()};
+function addHist(){const a=find(S.from),b=find(S.to),v=parseNum(S.val),r=conv(v,a,b);if(!isFinite(r))return;
+ HIST=HIST.filter(h=>!(h.from===S.from&&h.to===S.to&&h.val===S.val));HIST.unshift({from:S.from,to:S.to,val:S.val,t:Date.now()});HIST=HIST.slice(0,30);store.set('uc_hist',HIST);drawLib()}
+$('#hclr').onclick=()=>{HIST=[];store.set('uc_hist',HIST);drawLib()};
+function load(from,to,val){const a=find(from),b=find(to);if(!a||!b)return;S.cat=a.cat;S.from=from;S.to=to;if(val!=null)S.val=String(val);drawCats();pickers.forEach(p=>p.refresh());tab('conv');update(false);save()}
+function drawLib(){const row=(h,x)=>{const a=find(h.from),b=find(h.to);if(!a||!b)return '';return '<div class="item"><span>'+(x||'')+a.e+' '+esc(a.name)+' → '+b.e+' '+esc(b.name)+(h.val!=null?' <span class="mu">('+esc(h.val)+' '+esc(a.sym)+' = '+fmt(conv(parseNum(h.val),a,b),S)+' '+esc(b.sym)+')</span>':'')+'</span><span><button data-l="'+h.from+'|'+h.to+'|'+(h.val==null?'':esc(h.val))+'">Open</button>'+(x?' <button data-rm="'+h.from+'|'+h.to+'">Remove</button>':'')+'</span></div>'};
+ $('#favs').innerHTML=FAV.map(f=>row(f,'★ ')).join('')||'<p class="mu">No favorites yet. Tap ☆ Favorite on the converter to save the current pair.</p>';
+ $('#hist').innerHTML=HIST.map(h=>row(h)).join('')||'<p class="mu">Conversions you make appear here.</p>'}
+$('#t-lib').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.l){const p=b.dataset.l.split('|');load(p[0],p[1],p[2]===''?null:p[2])}
+ else if(b.dataset.rm){const p=b.dataset.rm.split('|');FAV=FAV.filter(f=>!(f.from===p[0]&&f.to===p[1]));store.set('uc_fav',FAV);drawLib();update(false)}};
+const rand=a=>a[Math.floor(Math.random()*a.length)];
+$('#rnd').onclick=()=>{const cs=Object.keys(CATS).filter(k=>k!=='temperature');const c=rand(cs),U=CATS[c].units,odd=U.filter(u=>u.type!=='s');
+ const pool=(S.weird||Math.random()<.75)&&odd.length>1?odd:U;const a=rand(pool);const b=rand(pool.filter(u=>u!==a));
+ S.cat=c;S.from=a.id;S.to=b.id;S.val=String(rand([1,2,3,5,10,42,100]));drawCats();pickers.forEach(p=>p.refresh());update();save();toast('🎲 '+a.name+' → '+b.name)};
+/* tabs */
+function tab(t){S.tab=t;document.querySelectorAll('section').forEach(s=>s.classList.toggle('on',s.id==='t-'+t));document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t))}
+$('#tabs').onclick=e=>{const b=e.target.closest('button');if(b)tab(b.dataset.t)};
+/* encyclopedia */
+$('#eq_c').innerHTML='<option value="">All categories</option>'+Object.values(CATS).map(c=>'<option value="'+c.key+'">'+c.name+'</option>').join('');
+$('#eq_t').innerHTML='<option value="">All kinds</option>'+Object.entries(TYPES).map(e=>'<option value="'+e[0]+'">'+e[1][0]+'</option>').join('');
+function drawEnc(){const q=$('#eq_s').value.trim().toLowerCase(),c=$('#eq_c').value,t=$('#eq_t').value;let n=0;let h='';
+ Object.values(CATS).forEach(C=>{if(c&&C.key!==c)return;C.units.forEach(u=>{if(t&&u.type!==t)return;if(q&&!(u.name+' '+u.sym+' '+u.d).toLowerCase().includes(q))return;if(++n>300)return;
+  h+='<div class="tile" style="--c:'+col(u)+';cursor:default"><b>'+u.e+' '+esc(u.name)+' <small class="mu">'+esc(u.sym)+'</small></b><span class="badge">'+TYPES[u.type][0]+'</span> <span class="mu">'+C.name+'</span><p style="margin:6px 0">'+esc(defDesc(u))+'</p><span class="mu">'+esc(defn(u))+'</span><br><button data-e="'+u.id+'" style="margin-top:6px">Convert this</button></div>'})});
+ $('#enc').innerHTML=h||'<p class="mu">No units match those filters.</p>'}
+['#eq_s','#eq_c','#eq_t'].forEach(s=>$(s).oninput=drawEnc);
+$('#enc').onclick=e=>{const b=e.target.closest('[data-e]');if(!b)return;const u=find(b.dataset.e),C=CATS[u.cat];const other=C.units.find(x=>x!==u&&x.type==='s')||C.units.find(x=>x!==u);load(u.id,other.id,1)};
+/* unit of the day */
+function drawUotd(){const pool=[];Object.values(CATS).forEach(C=>C.units.forEach(u=>{if(u.type!=='s'&&!u.custom)pool.push(u)}));
+ const u=pool[Math.floor(Date.now()/864e5)%pool.length],C=CATS[u.cat];
+ $('#uotd').innerHTML='<div style="font:600 22px Georgia,serif">'+u.e+' '+esc(u.name)+' <span class="badge" style="--c:'+col(u)+'">'+TYPES[u.type][0]+'</span></div><p>'+esc(defDesc(u))+'</p><p class="mu">'+C.name+' · '+esc(defn(u))+'</p><button id="uo">Try it</button>';
+ $('#uo').onclick=()=>load(u.id,C.units.find(x=>x.type==='s'&&x!==u).id,1)}
+/* challenges */
+const CH=[['How many bananas long is the Eiffel Tower?','length','Eiffel Tower','banana',1],['How many washing machines weigh as much as an elephant?','mass','elephant','washing machine',1],['How many moments are in a fortnight?','time','fortnight','moment',1],['How many pony powers equal a nuclear reactor?','power','nuclear reactor','pony power',1],['How many Smoots long is a football field?','length','football field (US)','Smoot',1],['How many jiffies are in one day?','time','day','jiffy',1],['How many paperclips weigh as much as a blue whale?','mass','blue whale','paperclip',1]];
+let ci=0,cur=null;
+function setChal(c){cur={q:c[0],a:byName(c[1],c[2]),b:byName(c[1],c[3]),n:c[4]};cur.ans=conv(cur.n,cur.a,cur.b);$('#cq').textContent=cur.q;$('#cg').value='';$('#ca').innerHTML='<span class="mu">Make a guess, then check it.</span>'}
+function showAns(extra){$('#ca').innerHTML=(extra||'')+'<div>Answer: <b class="res" style="font-size:26px">'+fmt(cur.ans,S)+' '+esc(cur.b.name)+(cur.ans===1?'':'s')+'</b></div><div class="mu">'+esc(defDesc(cur.a))+' '+esc(defDesc(cur.b))+'</div>'}
+$('#cc').onclick=()=>{const g=parseNum($('#cg').value);if(!isFinite(g)||g<=0){$('#ca').innerHTML='<span class="err">Enter a positive number to guess.</span>';return}
+ const r=g/cur.ans;const m=r>=0.95&&r<=1.05?'🎯 Spot on!':(Math.max(r,1/r)<2?'Close: within a factor of 2.':'Off by a factor of '+fmt(Math.max(r,1/r),{prec:3})+(r>1?' too high.':' too low.'));showAns('<p><b>'+m+'</b></p>')};
+$('#cr').onclick=()=>showAns('');
+$('#cn').onclick=()=>{ci=(ci+1)%CH.length;setChal(CH[ci])};
+$('#cx').onclick=()=>{const c=rand(Object.keys(CATS).filter(k=>k!=='temperature')),odd=CATS[c].units.filter(u=>u.type!=='s'),a=rand(odd),b=rand(odd.filter(u=>u!==a));const n=rand([1,2,5,10,100]);
+ setChal(['How many '+b.name+'s ('+b.sym+') are in '+n+' '+a.name+(n>1?'s':'')+'?',c,a.name,b.name,n])};
+/* custom units */
+$('#u_c').innerHTML=Object.values(CATS).filter(c=>c.key!=='temperature').map(c=>'<option value="'+c.key+'">'+c.name+'</option>').join('');
+function fillRef(){$('#u_u').innerHTML=CATS[$('#u_c').value].units.map(u=>'<option value="'+u.id+'">'+esc(u.name)+' ('+esc(u.sym)+')</option>').join('')}
+$('#u_c').onchange=fillRef;fillRef();
+$('#u_add').onclick=()=>{const m=$('#u_m'),c=$('#u_c').value,name=$('#u_n').value.trim(),sym=$('#u_s').value.trim()||name.slice(0,4),n=parseNum($('#u_f').value),ref=find($('#u_u').value);
+ if(!name){m.textContent='Enter a name.';return}if(CATS[c].units.some(u=>u.name.toLowerCase()===name.toLowerCase())){m.textContent='A unit with that name already exists in this category.';return}
+ if(!isFinite(n)||n<=0){m.textContent='Enter an amount greater than zero.';return}
+ const u={cat:c,name,sym,f:n*ref.f,type:$('#u_t').value,e:$('#u_e').value.trim(),d:$('#u_d').value.trim()||('Custom unit: 1 '+name+' = '+n+' '+ref.name+'.')};
+ CUSTOM.push(u);store.set('uc_custom',CUSTOM);addUnit(u.cat,u.name,u.sym,u.f,u.type,u.e,u.d,{custom:true});m.textContent='';['#u_n','#u_s','#u_f','#u_e','#u_d'].forEach(s=>$(s).value='');fillRef();drawUl();drawEnc();update(false);toast('Unit added')};
+function drawUl(){$('#ulist').innerHTML=CUSTOM.map((u,i)=>'<div class="item"><span>'+u.e+' '+esc(u.name)+' <span class="mu">('+esc(u.sym)+', '+CATS[u.cat].name+')</span></span><button data-d="'+i+'">Delete</button></div>').join('')||'<p class="mu">No custom units yet.</p>'}
+$('#ulist').onclick=e=>{const b=e.target.closest('[data-d]');if(!b)return;const u=CUSTOM.splice(+b.dataset.d,1)[0];const C=CATS[u.cat];C.units=C.units.filter(x=>!(x.custom&&x.name===u.name));
+ FAV=FAV.filter(f=>find(f.from)&&find(f.to));HIST=HIST.filter(h=>find(h.from)&&find(h.to));if(!find(S.from)||!find(S.to))setCat(S.cat,true);
+ store.set('uc_custom',CUSTOM);store.set('uc_fav',FAV);store.set('uc_hist',HIST);fillRef();pickers.forEach(p=>p.refresh());drawUl();drawEnc();drawLib();update(false)};
+drawCats();drawUotd();drawEnc();drawUl();drawLib();setChal(CH[0]);update(false);tab('conv');
+</script></body></html>
