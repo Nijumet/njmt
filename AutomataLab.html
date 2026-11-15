@@ -21,7 +21,9 @@ input[type=range]{accent-color:var(--acc);vertical-align:middle;width:90px}
 #toolbar{top:8px;left:50%;transform:translateX(-50%);display:flex;gap:4px;padding:5px;align-items:center;max-width:calc(100vw - 16px);flex-wrap:wrap;justify-content:center;z-index:5}
 #toolbar .sep{width:1px;height:20px;background:var(--line);margin:0 2px}
 .spd{display:flex;align-items:center;gap:5px;color:var(--dim)}
-#spdLbl{display:inline-block;min-width:44px;color:var(--fg)}
+#spdLbl{display:inline-block;min-width:62px;color:var(--fg)}
+button#bHyper.on{background:rgba(255,200,60,.22);border-color:#ffc83c;color:#fff;box-shadow:0 0 10px rgba(255,200,60,.4)}
+#speed:disabled{opacity:.35}
 #left{left:8px;top:64px;width:216px;max-height:calc(100% - 112px);overflow:auto;padding:8px;z-index:4}
 #right{right:8px;top:64px;width:282px;max-height:calc(100% - 112px);overflow:auto;padding:8px;z-index:4}
 .ph{color:var(--dim);margin:8px 0 5px;letter-spacing:.04em}
@@ -82,6 +84,7 @@ input[type=range]{accent-color:var(--acc);vertical-align:middle;width:90px}
  <button id="bPlay" class="primary" title="Play / Pause (Space)">▶ Play</button>
  <button id="bStep" title="Advance one generation (N)">Step ⏭</button>
  <label class="spd">Speed <input id="speed" type="range" min="0" max="100" value="45"><span id="spdLbl">10/s</span></label>
+ <button id="bHyper" title="Hyperspeed: 1000 generations/s (S)">⚡ Hyper</button>
  <span class="sep"></span>
  <button id="bUndo" title="Undo (Ctrl+Z)">↶</button>
  <button id="bRedo" title="Redo (Ctrl+Y)">↷</button>
@@ -123,6 +126,7 @@ input[type=range]{accent-color:var(--acc);vertical-align:middle;width:90px}
   <span>Births (last / total)</span><span id="sBirth">0 / 0</span>
   <span>Deaths (last / total)</span><span id="sDeath">0 / 0</span>
   <span>Speed</span><span id="sSpeed">0 gen/s</span>
+  <span>Step / render</span><span id="sPerf">-</span>
   <span>Zoom</span><span id="sZoom">-</span>
   <span>Cursor</span><span id="sCur">-</span>
  </div>
@@ -131,6 +135,7 @@ input[type=range]{accent-color:var(--acc);vertical-align:middle;width:90px}
  <label class="chk"><input type="checkbox" id="logG"> Logarithmic graph</label>
  <label class="chk"><input type="checkbox" id="showGrid" checked> Grid lines</label>
  <label class="chk"><input type="checkbox" id="anim" checked> Cell animation</label>
+ <label class="chk"><input type="checkbox" id="autoRes" checked> Auto resolution when heavy</label>
 </div>
 
 <div id="hud">x 0, y 0</div>
@@ -149,8 +154,9 @@ input[type=range]{accent-color:var(--acc);vertical-align:middle;width:90px}
    ============================================================ */
 const OFF=33554432, M=67108864, LIM=33000000;
 const mkey=(x,y)=>(x+OFF)*M+(y+OFF);
-const kxf=k=>{const y=k%M;return (k-y)/M-OFF;};
-const kyf=k=>(k%M)-OFF;
+const IM=1/M;                                  // exact: M is a power of two
+const kxf=k=>Math.floor(k*IM)-OFF;
+const kyf=k=>(k-Math.floor(k*IM)*M)-OFF;
 const DK4=[-1,M,1,-M];                       // N E S W
 const DK8=[-1,M,1,-M,M-1,M+1,1-M,-M-1];     // 4 orthogonal + 4 diagonal
 
@@ -161,7 +167,7 @@ function hash3(a,b,c){
   h^=h>>>15;h=Math.imul(h,0x85ebca6b);h^=h>>>13;h=Math.imul(h,0xc2b2ae35);h^=h>>>16;
   return (h>>>0)/4294967296;
 }
-function hk(k,s){const y=k%M;return hash3((k-y)/M,y,s+W.seed);}   // deterministic, order independent
+function hk(k,s){const x=Math.floor(k*IM);return hash3(x,k-x*M,s+W.seed);}   // deterministic, order independent
 
 function hex2rgb(h){h=h.replace('#','');return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
 function mixc(a,b,t){return [Math.round(a[0]+(b[0]-a[0])*t),Math.round(a[1]+(b[1]-a[1])*t),Math.round(a[2]+(b[2]-a[2])*t)];}
@@ -201,7 +207,34 @@ function parseRule(s){
 }
 
 /* ---------- per-generation proposal buffers ---------- */
-const cnt=new Map(),bK=[],bV=[],dK=[];
+/* Fast neighbour-count table: open addressing, Float64 keys, generation stamps => O(1) clear, no per-cell allocation. */
+const _f64=new Float64Array(1),_u32=new Uint32Array(_f64.buffer);
+class FastCnt{
+  constructor(){this.cap=1<<16;this.alloc();}
+  alloc(){const c=this.cap;this.keys=new Float64Array(c);this.vals=new Int32Array(c);this.stamp=new Uint32Array(c);this.used=new Int32Array(c>>1);this.n=0;this.cur=1;this.mask=c-1;}
+  clear(){this.n=0;if(++this.cur>=0xfffffff0){this.stamp.fill(0);this.cur=1;}}
+  slot(k){
+    _f64[0]=k;let h=Math.imul(_u32[0]^Math.imul(_u32[1],0x85ebca6b),0x9e3779b1);h^=h>>>15;
+    const st=this.stamp,ks=this.keys,cur=this.cur,m=this.mask;let i=h&m;
+    while(st[i]===cur){if(ks[i]===k)return i;i=(i+1)&m;}
+    return ~i;
+  }
+  inc(k,w){
+    let s=this.slot(k);
+    if(s>=0){this.vals[s]+=w;return;}
+    if(this.n>=this.used.length){this.grow();s=this.slot(k);}
+    const i=~s;this.stamp[i]=this.cur;this.keys[i]=k;this.vals[i]=w;this.used[this.n++]=i;
+  }
+  get(k){const s=this.slot(k);return s>=0?this.vals[s]:0;}
+  has(k){return this.slot(k)>=0;}
+  grow(){
+    const ok=this.keys,ov=this.vals,ou=this.used,n=this.n;this.cap<<=1;this.alloc();
+    for(let j=0;j<n;j++){const i=ou[j],q=~this.slot(ok[i]);this.stamp[q]=this.cur;this.keys[q]=ok[i];this.vals[q]=ov[i];this.used[this.n++]=q;}
+  }
+  forEach(fn){const u=this.used,n=this.n,ks=this.keys,vs=this.vals;for(let j=0;j<n;j++){const i=u[j];fn(vs[i],ks[i]);}}
+}
+const cnt=new FastCnt(),bK=[],bV=[],dK=[];
+const _cand=[],_due=[],_bkt=[],_bpool=[];
 
 /* Generic totalistic engine: counts only same-type neighbours.
    Births are proposed only for cells empty in the snapshot. */
@@ -210,7 +243,7 @@ function caUpdate(d,keys){
   const needCnt=d.useRule||d.reproP>0;
   if(needCnt){
     cnt.clear();
-    for(let i=0;i<keys.length;i++){const k=keys[i];for(let j=0;j<no;j++){const kk=k+offs[j];const c=cnt.get(kk);cnt.set(kk,c===undefined?1:c+1);}}
+    for(let i=0;i<keys.length;i++){const k=keys[i];for(let j=0;j<no;j++)cnt.inc(k+offs[j],1);}
     if(d.useRule&&d.Bm){
       const B=d.Bm;
       cnt.forEach((c,kk)=>{if(((B>>c)&1)&&!cells.has(kk)){bK.push(kk);bV.push(spawnVal(t,kk));}});
@@ -239,7 +272,7 @@ function pulseUpdate(d,keys){
   cnt.clear();
   for(let i=0;i<keys.length;i++){
     const k=keys[i];
-    if((cells.get(k)>>16)===1){for(let j=0;j<8;j++){const kk=k+DK8[j];cnt.set(kk,(cnt.get(kk)||0)+1);}}
+    if((cells.get(k)>>16)===1){for(let j=0;j<8;j++)cnt.inc(k+DK8[j],1);}
   }
   for(let i=0;i<keys.length;i++){
     const k=keys[i],v=cells.get(k),s=v>>16;let age=(v>>8)&255,nv;
@@ -291,7 +324,7 @@ function crystalUpdate(d,keys){
   cnt.clear();
   for(let i=0;i<keys.length;i++){
     const k=keys[i];
-    for(let j=0;j<8;j++){const kk=k+DK8[j];cnt.set(kk,(cnt.get(kk)||0)+(j<4?17:1));}
+    for(let j=0;j<8;j++)cnt.inc(k+DK8[j],j<4?17:1);
   }
   cnt.forEach((c,kk)=>{
     if((c===1||c===17)&&!cells.has(kk)){
@@ -301,7 +334,11 @@ function crystalUpdate(d,keys){
 }
 
 /* ---------- movers: sequential, canonical order, only into EMPTY space ---------- */
-function sortedKeys(keys){const a=Float64Array.from(keys);a.sort();return a;}
+let _sbuf=new Float64Array(1<<16);
+function sortedKeys(keys){
+  const n=keys.length;if(_sbuf.length<n)_sbuf=new Float64Array(Math.max(n,_sbuf.length*2));
+  const a=_sbuf.subarray(0,n);for(let i=0;i<n;i++)a[i]=keys[i];a.sort();return a;
+}
 
 function moveGravity(d,keys){
   const cells=W.cells,t=d.id,gen=W.gen,slide=d.p.slide;
@@ -388,7 +425,7 @@ function movePredator(d,keys){
     }
     let nk=k;
     if(adj<3){
-      const cand=[];
+      const cand=_cand;cand.length=0;
       if(n>0){
         const ax=Math.abs(sx),ay=Math.abs(sy),px=sx>0?M:sx<0?-M:0,py=sy>0?1:sy<0?-1:0;
         if(ax>=ay){if(px)cand.push(px);if(py)cand.push(py);}else{if(py)cand.push(py);if(px)cand.push(px);}
@@ -517,13 +554,13 @@ function step(){
   const cells=W.cells,pop=W.pop;
   W.gen++;const gen=W.gen;W.lastB=0;W.lastD=0;
   bK.length=0;bV.length=0;dK.length=0;
-  const n=TYPES.length,due=new Array(n),buckets=new Array(n);
+  const n=TYPES.length,due=_due,buckets=_bkt;due.length=n;buckets.length=n;let anyDue=false;
   for(let t=0;t<n;t++){
     const d=TYPES[t];
     due[t]=!d.deleted&&!!(d.update||d.mover)&&pop[t]>0&&gen%d.freq===0;
-    if(due[t])buckets[t]=[];
+    if(due[t]){anyDue=true;let b=_bpool[t];if(!b)b=_bpool[t]=[];b.length=0;buckets[t]=b;}else buckets[t]=undefined;
   }
-  cells.forEach((v,k)=>{const b=buckets[v&255];if(b)b.push(k);});
+  if(anyDue)cells.forEach((v,k)=>{const b=buckets[v&255];if(b)b.push(k);});
   for(let t=0;t<n;t++)if(due[t]&&TYPES[t].update)TYPES[t].update(buckets[t]);
   for(let i=0;i<dK.length;i++){
     const k=dK[i],v=cells.get(k);
@@ -576,7 +613,10 @@ function typeByName(n){return TYPES.find(t=>t.name===n&&!t.deleted);}
 const fmt=n=>Math.round(n).toLocaleString('en-US');
 
 /* ---------- state ---------- */
-const cv=$('c'),ctx=cv.getContext('2d');
+const cv=$('c'),mainCtx=cv.getContext('2d',{alpha:false});
+let ctx=mainCtx;
+const wcv=document.createElement('canvas'),wctx=wcv.getContext('2d',{alpha:false});   // cached world layer
+let worldValid=false,ovDirty=false,rscale=1,autoRes=true,lastPath='px',hyper=false;
 let dpr=1,CW=0,CH=0,Wd=0,Hd=0,img=null,buf32=null,dirty=true;
 const cam={x:0,y:0,z:12},tgt={x:0,y:0,z:12,anchor:null};
 const HOME={x:0,y:0,z:12},ZMIN=0.002,ZMAX=140;
@@ -588,6 +628,10 @@ const BG='#06080d',BG32=((255<<24)|(0x0d<<16)|(0x08<<8)|0x06)>>>0;
 let curAct=null;const undoStack=[],redoStack=[];
 function beginAct(){if(!curAct)curAct=new Map();}
 function rec(k){if(curAct&&!curAct.has(k))curAct.set(k,W.cells.get(k));}
+function pushUndo(list){
+  undoStack.push(list);let t=0;for(const a of undoStack)t+=a.length;
+  while(undoStack.length>1&&(undoStack.length>60||t>1500000))t-=undoStack.shift().length;
+}
 function endAct(){
   if(!curAct)return;
   const list=[];
@@ -595,7 +639,7 @@ function endAct(){
   curAct=null;
   if(!list.length)return;
   if(list.length>1500000){undoStack.length=0;redoStack.length=0;updUndo();return;}
-  undoStack.push(list);if(undoStack.length>60)undoStack.shift();
+  pushUndo(list);
   redoStack.length=0;updUndo();
 }
 function applyChanges(list,useOld){
@@ -1001,8 +1045,9 @@ function deleteCustom(d){
 
 /* ---------- camera ---------- */
 function resize(){
-  dpr=Math.min(window.devicePixelRatio||1,2);CW=innerWidth;CH=innerHeight;
-  cv.width=Wd=Math.floor(CW*dpr);cv.height=Hd=Math.floor(CH*dpr);img=null;dirty=true;
+  dpr=Math.min(window.devicePixelRatio||1,2)*rscale;CW=innerWidth;CH=innerHeight;
+  Wd=Math.max(1,Math.floor(CW*dpr));Hd=Math.max(1,Math.floor(CH*dpr));cv.width=wcv.width=Wd;cv.height=wcv.height=Hd;
+  img=null;worldValid=false;dirty=true;cv.style.imageRendering=rscale<1?'pixelated':'auto';
 }
 const s2w=(sx,sy)=>[(sx-CW/2)/cam.z+cam.x,(sy-CH/2)/cam.z+cam.y];
 function zoomAt(sx,sy,f){
@@ -1038,7 +1083,7 @@ function visit(x0,x1,y0,y1,fn){
     }
   }else{
     cells.forEach((v,k)=>{
-      const yy=k%M,x=(k-yy)/M-OFF,y=yy-OFF;
+      const xx=Math.floor(k*IM),x=xx-OFF,y=k-xx*M-OFF;
       if(x>=x0&&x<=x1&&y>=y0&&y<=y1)fn(v,x,y);
     });
   }
@@ -1058,33 +1103,44 @@ function previewCells(){
   if(tool==='line'||tool==='rect'||tool==='fill')return [[hoverCell[0],hoverCell[1],TYPES[selType].pal[0].css]];
   return null;
 }
-function render(){
+const _vis=new Uint8Array(256),_shf=[],_pal=new Uint32Array(256*8);
+const _rb=[],rn=new Int32Array(256);
+function pushR(t,a,b,c){
+  let arr=_rb[t],n=rn[t];
+  if(!arr)arr=_rb[t]=new Float32Array(3072);
+  else if(n+3>arr.length){const na=new Float32Array(arr.length*2);na.set(arr);arr=_rb[t]=na;}
+  arr[n]=a;arr[n+1]=b;arr[n+2]=c;rn[t]=n+3;
+}
+function renderWorld(){
   const zd=cam.z*dpr,ox=cam.x,oy=cam.y,hw=Wd/2,hh=Hd/2,now=performance.now();
   let x0=Math.floor(ox-hw/zd)-1,x1=Math.floor(ox+hw/zd)+1,y0=Math.floor(oy-hh/zd)-1,y1=Math.floor(oy+hh/zd)+1;
   x0=Math.max(x0,-LIM);y0=Math.max(y0,-LIM);x1=Math.min(x1,LIM);y1=Math.min(y1,LIM);
   ctx.setTransform(1,0,0,1,0,0);
   if(zd<3.5){
+    lastPath='px';
     if(!img||img.width!==Wd||img.height!==Hd){img=ctx.createImageData(Wd,Hd);buf32=new Uint32Array(img.data.buffer);}
     buf32.fill(BG32);
     const s=Math.max(1,Math.ceil(zd-0.01));
+    _vis.fill(0);
+    for(let t=0;t<TYPES.length;t++){const d=TYPES[t];if(d.visible&&!d.deleted){_vis[t]=1;_shf[t]=d.shade||null;for(let i=0;i<8;i++)_pal[t*8+i]=d.pal[i].u32;}}
     visit(x0,x1,y0,y1,(v,x,y)=>{
-      const d=TYPES[v&255];if(!d||!d.visible)return;
-      const px=Math.floor((x-ox)*zd+hw),py=Math.floor((y-oy)*zd+hh),c=d.pal[d.shade?d.shade(v):0].u32;
+      const t=v&255;if(!_vis[t])return;
+      const px=Math.floor((x-ox)*zd+hw),py=Math.floor((y-oy)*zd+hh),sf=_shf[t],c=_pal[t*8+(sf?sf(v):0)];
       if(s===1){if(px>=0&&px<Wd&&py>=0&&py<Hd)buf32[py*Wd+px]=c;}
       else for(let j=0;j<s;j++){const yy=py+j;if(yy<0||yy>=Hd)continue;for(let i=0;i<s;i++){const xx=px+i;if(xx>=0&&xx<Wd)buf32[yy*Wd+xx]=c;}}
     });
     ctx.putImageData(img,0,0);
   }else{
     ctx.fillStyle=BG;ctx.fillRect(0,0,Wd,Hd);
-    const bufs=[];
+    lastPath='rect';const bufs=_rb;rn.fill(0);
     visit(x0,x1,y0,y1,(v,x,y)=>{
       const t=v&255,d=TYPES[t];if(!d||!d.visible)return;
-      (bufs[t]||(bufs[t]=[])).push((x-ox)*zd+hw,(y-oy)*zd+hh,d.shade?d.shade(v):0);
+      pushR(t,(x-ox)*zd+hw,(y-oy)*zd+hh,d.shade?d.shade(v):0);
     });
     drawGrid(x0,x1,y0,y1,zd,ox,oy,hw,hh);
     const gap=zd>=9?Math.max(1,Math.round(zd*0.07)):0;
     for(let t=0;t<bufs.length;t++){
-      const b=bufs[t];if(!b)continue;
+      const b=bufs[t];if(!b||!rn[t])continue;const bn=rn[t];
       const d=TYPES[t];let alpha=1;
       if(anim){
         if(d.anim==='flicker')alpha=0.8+0.2*Math.random();
@@ -1092,7 +1148,7 @@ function render(){
         else if(d.anim==='shimmer')alpha=0.88+0.12*Math.sin(now/420);
       }
       ctx.globalAlpha=alpha;let last=-1;
-      for(let i=0;i<b.length;i+=3){
+      for(let i=0;i<bn;i+=3){
         const sh=b[i+2];
         if(sh!==last){ctx.fillStyle=d.pal[sh].css;last=sh;}
         if(gap){ctx.fillRect(b[i],b[i+1],zd-gap,zd-gap);}
@@ -1100,11 +1156,16 @@ function render(){
       }
       if(zd>=14){
         ctx.globalAlpha=alpha*0.2;ctx.fillStyle='#fff';const q=Math.max(1,zd*0.14);
-        for(let i=0;i<b.length;i+=3)ctx.fillRect(b[i]+q,b[i+1]+q,zd-gap-q*2,Math.max(1,zd*0.18));
+        for(let i=0;i<bn;i+=3)ctx.fillRect(b[i]+q,b[i+1]+q,zd-gap-q*2,Math.max(1,zd*0.18));
       }
     }
     ctx.globalAlpha=1;
   }
+}
+function render(full){
+  const zd=cam.z*dpr,ox=cam.x,oy=cam.y,hw=Wd/2,hh=Hd/2;
+  if(full||!worldValid){ctx=wctx;renderWorld();ctx=mainCtx;worldValid=true;}
+  ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.drawImage(wcv,0,0);   // overlays below never touch the cached world
   // origin axes
   ctx.lineWidth=1;ctx.strokeStyle='rgba(110,231,255,0.10)';ctx.beginPath();
   const ax=Math.round((0-ox)*zd+hw)+0.5,ay=Math.round((0-oy)*zd+hh)+0.5;
@@ -1153,7 +1214,7 @@ function normRect(a,b){return {x0:Math.min(a[0],b[0]),y0:Math.min(a[1],b[1]),x1:
 /* ---------- input ---------- */
 const ptrs=new Map();let gest=null;
 function cellAt(cx,cy){const w=s2w(cx,cy);return [Math.floor(w[0]),Math.floor(w[1])];}
-function hoverUpdate(e){hoverCell=cellAt(e.clientX,e.clientY);dirty=true;}
+function hoverUpdate(e){const c=cellAt(e.clientX,e.clientY);if(!hoverCell||hoverCell[0]!==c[0]||hoverCell[1]!==c[1]){hoverCell=c;ovDirty=true;}}
 function cancelStroke(){if(stroke&&(stroke.mode==='draw'||stroke.mode==='erase'))endAct();stroke=null;}
 function startGesture(){
   const a=[...ptrs.values()];
@@ -1206,7 +1267,7 @@ cv.addEventListener('pointermove',e=>{
     });
     stroke.last=c;
   }else stroke.cur=c;
-  dirty=true;
+  if(stroke.mode==='pan'||stroke.mode==='draw'||stroke.mode==='erase')dirty=true;else ovDirty=true;
 });
 function pointerEnd(e){
   ptrs.delete(e.pointerId);
@@ -1222,7 +1283,7 @@ function pointerEnd(e){
 }
 cv.addEventListener('pointerup',pointerEnd);
 cv.addEventListener('pointercancel',pointerEnd);
-cv.addEventListener('pointerleave',()=>{if(!stroke){hoverCell=null;dirty=true;}});
+cv.addEventListener('pointerleave',()=>{if(!stroke){hoverCell=null;ovDirty=true;}});
 cv.addEventListener('wheel',e=>{
   e.preventDefault();
   let dy=e.deltaY;if(e.deltaMode===1)dy*=16;else if(e.deltaMode===2)dy*=400;
@@ -1266,6 +1327,7 @@ window.addEventListener('keydown',e=>{
   else if((e.ctrlKey||e.metaKey)&&k==='c'){if(sel){e.preventDefault();$('bSelCopy').click();}}
   else if(k===' '){e.preventDefault();togglePlay();}
   else if(k==='n'||k==='arrowright'){stepOnce();}
+  else if(k==='s'&&!e.ctrlKey&&!e.metaKey){setHyper(!hyper);}
   else if(k==='h'){goTo(HOME.x,HOME.y,HOME.z);}
   else if(k==='d')setTool('draw');
   else if(k==='e')setTool('erase');
@@ -1291,10 +1353,21 @@ function endAct0(){
   const act=curAct;curAct=null;
   const list=[];act.forEach((old,k)=>list.push([k,old,undefined]));
   clearAll();resetHist();dirty=true;
-  if(list.length&&list.length<=1500000){undoStack.push(list);if(undoStack.length>60)undoStack.shift();redoStack.length=0;}
+  if(list.length&&list.length<=1500000){pushUndo(list);redoStack.length=0;}
   updUndo();
 }
-$('speed').oninput=()=>{gps=0.5*Math.pow(480,$('speed').value/100);$('spdLbl').textContent=(gps<10?gps.toFixed(1):Math.round(gps))+'/s';};
+let gpsSlider=10;
+function applySpeed(){
+  gps=hyper?1000:gpsSlider;
+  $('spdLbl').textContent=hyper?'1000/s ⚡':(gps<10?gps.toFixed(1):Math.round(gps))+'/s';
+}
+function setHyper(on){
+  hyper=!!on;$('bHyper').classList.toggle('on',hyper);$('speed').disabled=hyper;applySpeed();acc=0;
+  toast(hyper?'Hyperspeed ON — target 1000 generations/s':'Hyperspeed off');
+}
+$('bHyper').onclick=()=>setHyper(!hyper);
+$('autoRes').onchange=()=>{autoRes=$('autoRes').checked;if(!autoRes&&rscale<1){rscale=1;resize();}};
+$('speed').oninput=()=>{gpsSlider=0.5*Math.pow(480,$('speed').value/100);applySpeed();};
 $('speed').oninput();
 $('brush').oninput=()=>{brush=+$('brush').value;$('brushLbl').textContent=brush;mkBrush();};
 $('overwrite').onchange=()=>{overwrite=$('overwrite').checked;};
@@ -1429,7 +1502,7 @@ $('bHelp').onclick=()=>{
     h('p',null,'One infinite sparse grid, many cell species. Each species counts only its own kind as neighbours — every other species is empty space to it. No cell can overwrite, kill or modify another species; they interact only by competing for empty space.'),
     h('p',null,'Conflicts for the same empty cell resolve deterministically (lower cell-type order wins; movers act in a fixed spatial order). Same start state and rules ⇒ same universe.'),
     h('p',null,h('b',null,'Navigate: '),'mouse wheel / pinch to zoom at the cursor; right- or middle-drag, the Pan tool, or two fingers to pan.'),
-    h('p',null,h('b',null,'Keys: '),h('kbd',null,'Space'),' play/pause · ',h('kbd',null,'N'),' step · ',h('kbd',null,'H'),' reset view · ',h('kbd',null,'D'),'/',h('kbd',null,'E'),' draw/erase · ',h('kbd',null,'1'),'–',h('kbd',null,'9'),' pick cell · ',h('kbd',null,'Ctrl+Z'),'/',h('kbd',null,'Y'),' undo/redo · ',h('kbd',null,'R'),'/',h('kbd',null,'F'),' rotate/flip pattern · ',h('kbd',null,'Esc'),' cancel'),
+    h('p',null,h('b',null,'Keys: '),h('kbd',null,'Space'),' play/pause · ',h('kbd',null,'N'),' step · ',h('kbd',null,'S'),' hyperspeed (1000 gen/s) · ',h('kbd',null,'H'),' reset view · ',h('kbd',null,'D'),'/',h('kbd',null,'E'),' draw/erase · ',h('kbd',null,'1'),'–',h('kbd',null,'9'),' pick cell · ',h('kbd',null,'Ctrl+Z'),'/',h('kbd',null,'Y'),' undo/redo · ',h('kbd',null,'R'),'/',h('kbd',null,'F'),' rotate/flip pattern · ',h('kbd',null,'Esc'),' cancel'),
     h('p',null,'Tip: Wall is an inert barrier. Try gravity sand on Wall ramps, liquid in basins, crystals growing around Conway still lifes, or fire racing through empty space past other species.'),
     h('p',null,'World extent is about ±33 million cells in each direction.')));
 };
@@ -1496,7 +1569,7 @@ function loadPreset(p){
   const list=[];
   curAct.forEach((old,k)=>{const nv=W.cells.get(k);if(nv!==old)list.push([k,old,nv]);});
   curAct=null;
-  if(list.length<=1500000){undoStack.push(list);if(undoStack.length>60)undoStack.shift();redoStack.length=0;}
+  if(list.length<=1500000){pushUndo(list);redoStack.length=0;}
   updUndo();sel=null;showSel();
   cam.x=tgt.x=p.cam[0];cam.y=tgt.y=p.cam[1];cam.z=tgt.z=p.cam[2];tgt.anchor=null;
   HOME.x=p.cam[0];HOME.y=p.cam[1];HOME.z=p.cam[2];
@@ -1530,17 +1603,20 @@ function drawGraph(){
   for(let t=0;t<TYPES.length;t++){if(!present[t]||!TYPES[t].visible||TYPES[t].deleted)continue;plot(r=>r[t]||0,TYPES[t].color,1.6);}
   g.fillStyle='rgba(214,224,246,.7)';g.font='18px ui-monospace,monospace';g.fillText('max '+fmt(max),6,18);
 }
-let lastStatT=0,stepCount=0,lastRateT=performance.now(),rate=0;
+let lastStatT=0,stepCount=0,lastRateT=performance.now(),rate=0,lastRender=0,renderMs=0,stepMs=0,lastResT=0;
+const _tx=new Map();
+function setTxt(id,t){if(_tx.get(id)!==t){_tx.set(id,t);$(id).textContent=t;}}   // skip DOM writes when text is unchanged
 function updStats(){
-  $('sGen').textContent=fmt(W.gen);
-  $('sPop').textContent=fmt(W.cells.size);
-  $('sBirth').textContent=fmt(W.lastB)+' / '+fmt(W.totB);
-  $('sDeath').textContent=fmt(W.lastD)+' / '+fmt(W.totD);
-  $('sSpeed').textContent=(running?rate.toFixed(rate<10?1:0):'0')+' gen/s (target '+(gps<10?gps.toFixed(1):Math.round(gps))+')';
-  const z=cam.z;$('sZoom').textContent=z>=1?z.toFixed(z<10?2:1)+' px/cell':'1 px = '+fmt(1/z)+' cells';
-  $('sCur').textContent=hoverCell?fmt(hoverCell[0])+', '+fmt(hoverCell[1]):'—';
-  $('hud').textContent=(hoverCell?'x '+fmt(hoverCell[0])+'  y '+fmt(hoverCell[1]):'x —  y —')+'   ·   gen '+fmt(W.gen)+'   ·   pop '+fmt(W.cells.size);
-  for(const id in rows){rows[id].pp.textContent=fmt(W.pop[id]);}
+  setTxt('sGen',fmt(W.gen));
+  setTxt('sPop',fmt(W.cells.size));
+  setTxt('sBirth',fmt(W.lastB)+' / '+fmt(W.totB));
+  setTxt('sDeath',fmt(W.lastD)+' / '+fmt(W.totD));
+  setTxt('sSpeed',(running?rate.toFixed(rate<10?1:0):'0')+' gen/s (target '+(gps<10?gps.toFixed(1):Math.round(gps))+')');
+  setTxt('sPerf',stepMs.toFixed(1)+' / '+renderMs.toFixed(1)+' ms'+(rscale<1?' · res '+Math.round(rscale*100)+'%':''));
+  const z=cam.z;setTxt('sZoom',z>=1?z.toFixed(z<10?2:1)+' px/cell':'1 px = '+fmt(1/z)+' cells');
+  setTxt('sCur',hoverCell?fmt(hoverCell[0])+', '+fmt(hoverCell[1]):'—');
+  setTxt('hud',(hoverCell?'x '+fmt(hoverCell[0])+'  y '+fmt(hoverCell[1]):'x —  y —')+'   ·   gen '+fmt(W.gen)+'   ·   pop '+fmt(W.cells.size));
+  for(const id in rows){const p=rows[id].pp,t=fmt(W.pop[id]);if(p._s!==t){p._s=t;p.textContent=t;}}
   if(!$('right').classList.contains('hide'))drawGraph();
 }
 function stepOnce(){step();recordHist();stepCount++;dirty=true;}
@@ -1548,19 +1624,34 @@ let acc=0,lastTs=0,lastAnim=0;
 function frame(ts){
   requestAnimationFrame(frame);
   const dt=Math.min(100,ts-lastTs)||16;lastTs=ts;
+  // while running, heavy renders are rationed so the simulation gets the time (hyperspeed renders ~30 fps)
+  const rGap=running?(hyper?32:(renderMs>22?renderMs*1.3:0)):0;
+  const rDue=ts-lastRender>=rGap;
   if(running){
-    acc+=dt/1000*gps;const t0=performance.now();
-    while(acc>=1){stepOnce();acc-=1;if(performance.now()-t0>14){acc=Math.min(acc,1);break;}}
+    acc+=dt/1000*gps;
+    const t0=performance.now(),budget=rDue?Math.max(6,Math.min(26,(hyper?24:15)-renderMs)):26;
+    let n=0;
+    while(acc>=1){step();stepCount++;n++;acc-=1;if(performance.now()-t0>budget){acc=Math.min(acc,1);break;}}
+    if(n){recordHist();dirty=true;stepMs=stepMs*0.8+((performance.now()-t0)/n)*0.2;}   // one graph sample per frame
   }
   camUpdate();
-  if(anim&&ts-lastAnim>110){
+  if(anim&&cam.z*dpr>=3.5&&ts-lastAnim>110){   // animation only exists in the zoomed-in renderer
     lastAnim=ts;
     for(const d of TYPES)if(d.anim&&d.anim!=='none'&&d.visible&&W.pop[d.id]>0){dirty=true;break;}
   }
-  if(dirty){dirty=false;render();}
-  if(ts-lastStatT>200){
+  const doWorld=dirty&&rDue;
+  if(doWorld||(ovDirty&&!dirty)){
+    const t1=performance.now();render(doWorld);const rt=performance.now()-t1;
+    if(doWorld){dirty=false;lastRender=ts;renderMs=renderMs*0.7+rt*0.3;}
+    ovDirty=false;
+  }
+  if(ts-lastStatT>(hyper?300:200)){
     lastStatT=ts;
     const nw=performance.now();if(nw-lastRateT>=1000){rate=stepCount*1000/(nw-lastRateT);stepCount=0;lastRateT=nw;}
+    if(autoRes&&nw-lastResT>800&&lastPath==='px'){   // adaptive resolution for the full-screen pixel renderer
+      if(renderMs>26&&rscale>0.5){rscale=Math.max(0.5,rscale*0.8);lastResT=nw;resize();}
+      else if(renderMs<8&&rscale<1){rscale=Math.min(1,rscale/0.8);lastResT=nw;resize();}
+    }
     updStats();
   }
 }
